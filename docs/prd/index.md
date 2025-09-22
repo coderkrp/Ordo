@@ -1,0 +1,23 @@
+# Ordo Product Requirements Document (PRD)
+
+## Table of Contents
+
+- [Ordo Product Requirements Document (PRD)](#table-of-contents)
+  - [1. Goals and Background Context](./1-goals-and-background-context.md)
+    - [1.1. Goals](./1-goals-and-background-context.md#11-goals)
+    - [1.2. Background Context](./1-goals-and-background-context.md#12-background-context)
+    - [1.3. Change Log](./1-goals-and-background-context.md#13-change-log)
+  - [2. Requirements](./2-requirements.md)
+    - [2.1. Functional Requirements](./2-requirements.md#21-functional-requirements)
+    - [2.2. Non-Functional Requirements](./2-requirements.md#22-non-functional-requirements)
+    - [2.3. Post-MVP & Operational Requirements](./2-requirements.md#23-post-mvp-operational-requirements)
+  - [3. Technical Assumptions](./3-technical-assumptions.md)
+    - [3.1. Repository Structure: Monorepo](./3-technical-assumptions.md#31-repository-structure-monorepo)
+    - [3.2. Service Architecture: Monolith](./3-technical-assumptions.md#32-service-architecture-monolith)
+    - [3.3. Testing Requirements: Unit + Integration](./3-technical-assumptions.md#33-testing-requirements-unit-integration)
+    - [3.4. Additional Technical Assumptions and Requests](./3-technical-assumptions.md#34-additional-technical-assumptions-and-requests)
+  - [4. Product Backlog](./4-product-backlog.md)
+    - [Sprint 0: Project Setup & Infrastructure Prep](./4-product-backlog.md#sprint-0-project-setup-infrastructure-prep)
+    - [Epic 1: Foundation & Validated Single-Broker Workflow](./4-product-backlog.md#epic-1-foundation-validated-single-broker-workflow)
+    - [Epic 2: Multi-Broker Orchestration & Safe Order Placement](./4-product-backlog.md#epic-2-multi-broker-orchestration-safe-order-placement)
+    - [Epic 3: Resilience, Operations & Community Enablement](./4-product-backlog.md#epic-3-resilience-operations-community-enablement)

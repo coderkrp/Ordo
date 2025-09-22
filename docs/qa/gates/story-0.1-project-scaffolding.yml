@@ -1,0 +1,92 @@
+# <!-- Powered by BMAD™ Core -->
+template:
+  id: qa-gate-template-v1
+  name: Quality Gate Decision
+  version: 1.0
+  output:
+    format: yaml
+    filename: qa.qaLocation/gates/0.1-project-scaffolding.yml
+    title: "Quality Gate: 0.1"
+
+# Required fields (keep these first)
+schema: 1
+story: "0.1"
+story_title: "Project Scaffolding"
+gate: "PASS"
+status_reason: "All acceptance criteria met, and project scaffolding adheres to defined standards. No functional code, thus no security, performance, or testability concerns."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-09-22T00:00:00Z"
+
+# Always present but only active when WAIVED
+waiver: { active: false }
+
+# Issues (if any) - Use fixed severity: low | medium | high
+top_issues: []
+
+# Risk summary (from risk-profile task if run)
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor: []
+
+# Examples section using block scalars for clarity
+examples:
+  with_issues: |
+    top_issues:
+      - id: "SEC-001"
+        severity: high  # ONLY: low|medium|high
+        finding: "No rate limiting on login endpoint"
+        suggested_action: "Add rate limiting middleware before production"
+
+  when_waived: |
+    waiver:
+      active: true
+      reason: "Accepted for MVP release - will address in next sprint"
+      approved_by: "Product Owner"
+
+# ============ Optional Extended Fields ============ 
+# Uncomment and use if your team wants more detail
+
+optional_fields_examples:
+  quality_and_expiry: |
+    quality_score: 100  # 100 - (20*FAILs) - (10*CONCERNS) or use technical-preferences.md weights
+    expires: "2025-10-06T00:00:00Z"  # Typically 2 weeks from review
+
+  evidence: |
+    evidence:
+      tests_reviewed: 0
+      risks_identified: 0
+      trace:
+        ac_covered: [1, 2, 3, 4, 5]
+        ac_gaps: []
+
+  nfr_validation: |
+    nfr_validation:
+      security: { status: N/A, notes: "No functional code in this story." }
+      performance: { status: N/A, notes: "No functional code in this story." }
+      reliability: { status: N/A, notes: "No functional code in this story." }
+      maintainability: { status: PASS, notes: "Project scaffolding adheres to defined standards." }
+
+  history: |
+    history:  # Append-only audit trail
+      - at: "2025-09-22T00:00:00Z"
+        gate: PASS
+        note: "Initial review - project scaffolding complete."
+
+  risk_summary: |
+    risk_summary:  # From risk-profile task
+      totals:
+        critical: 0
+        high: 0
+        medium: 0
+        low: 0
+      # 'highest' is emitted only when risks exist
+      recommendations:
+        must_fix: []
+        monitor: []
+
+  recommendations: |
+    recommendations:
+      immediate: []
+      future: []

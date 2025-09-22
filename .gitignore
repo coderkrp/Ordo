@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+.venv/
+virtualenv/
+env/
+venv/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+.Trashes
+Thumbs.db
+
+# Poetry
+.poetry/
+
+# uv
+.uv/
+
+# BMad and Gemini specific directories
+.bmad-core/
+.gemini/

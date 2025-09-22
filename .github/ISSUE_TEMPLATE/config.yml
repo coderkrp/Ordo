@@ -1,0 +1,4 @@
+# Optional GitHub issue template config — paste into .github/ISSUE_TEMPLATE/config.yml
+# This file controls whether a blank issue is allowed and provides contact links. Adjust as needed.
+blank_issues_enabled: false
+contact_links: []
