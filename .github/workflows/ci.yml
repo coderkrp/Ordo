@@ -26,10 +26,11 @@ jobs:
       with:
         python-version: '3.12' # Ensure this matches your project's Python version
 
-    - name: Install Poetry
+    - name: Install Poetry with pipx
       run: |
-        pip install poetry
-        echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
+        pip install pipx
+        pipx ensurepath
+        pipx install poetry
 
     - name: Install dependencies
       run: poetry install --no-interaction --no-root
