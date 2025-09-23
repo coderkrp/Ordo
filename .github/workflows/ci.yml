@@ -38,7 +38,7 @@ jobs:
     - name: Install dependencies
       run: |
         poetry lock --no-interaction
-        poetry install --no-interaction --with dev
+        poetry install --no-interaction --with dev --editable
 
     - name: Create .env file for tests
       run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
