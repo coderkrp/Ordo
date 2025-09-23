@@ -27,6 +27,9 @@ jobs:
         python-version: '3.12' # Ensure this matches your project's Python version
         cache: 'poetry'
 
+    - name: Install Poetry
+      run: pip install poetry
+
     - name: Install dependencies
       run: poetry install --no-interaction --no-root
 
