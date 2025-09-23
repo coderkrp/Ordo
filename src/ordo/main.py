@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI
 from ordo.security.authentication import authentication_middleware
 
 app = FastAPI()
