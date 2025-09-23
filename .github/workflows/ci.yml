@@ -46,6 +46,9 @@ jobs:
       # Use GitHub Secrets for ORDO_API_TOKEN if tests need a real token.
       # For this example, a dummy token is sufficient as it's for CI.
 
+    - name: Debug Python Path
+      run: python -c "import sys; print(sys.path)"
+
     - name: Run tests
       run: poetry run pytest tests/
 
