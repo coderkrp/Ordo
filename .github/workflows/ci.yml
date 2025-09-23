@@ -44,7 +44,7 @@ jobs:
       # For this example, a dummy token is sufficient as it's for CI.
 
     - name: Run tests
-      run: poetry run pytest
+      run: poetry run pytest tests/
 
     - name: Run linter (Ruff)
       run: poetry run ruff check src/ordo/
