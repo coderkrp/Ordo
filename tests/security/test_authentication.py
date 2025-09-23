@@ -1,4 +1,3 @@
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -46,4 +45,3 @@ def test_health_check_with_valid_token():
     response = client.get("/health", headers={"Authorization": f"Bearer {TEST_API_TOKEN}"})
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-
