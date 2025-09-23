@@ -1,0 +1,48 @@
+# This workflow will:
+#   * Trigger on pushes to main and on pull requests targeting main.
+#   * Set up a Python environment.
+#   * Install dependencies using Poetry.
+#   * Run your tests (pytest), linter (ruff), and formatter check (black --check).
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12' # Ensure this matches your project's Python version
+
+    - name: Install Poetry
+      run: pip install poetry
+
+    - name: Install dependencies
+      run: poetry install --no-root
+
+    - name: Create .env file for tests
+      run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
+      # CRITICAL: In a real project, avoid hardcoding secrets.
+      # Use GitHub Secrets for ORDO_API_TOKEN if tests need a real token.
+      # For this example, a dummy token is sufficient as it's for CI.
+
+    - name: Run tests
+      run: poetry run pytest
+
+    - name: Run linter (Ruff)
+      run: poetry run ruff check src/ordo/
+
+    - name: Run formatter check (Black)
+      run: poetry run black --check src/ordo/
