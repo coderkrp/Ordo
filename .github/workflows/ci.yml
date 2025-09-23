@@ -40,7 +40,10 @@ jobs:
         poetry --version
         which poetry
         poetry lock --no-interaction
-        poetry install --no-interaction --with dev --editable
+        poetry install --no-interaction --with dev
+
+    - name: Install project in editable mode
+      run: pip install -e .
 
     - name: Create .env file for tests
       run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
