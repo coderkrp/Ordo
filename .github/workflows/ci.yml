@@ -37,13 +37,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        poetry --version
-        which poetry
         poetry lock --no-interaction
         poetry install --no-interaction --with dev
-
-    - name: Install project in editable mode
-      run: pip install -e .
 
     - name: Create .env file for tests
       run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
@@ -51,14 +46,9 @@ jobs:
       # Use GitHub Secrets for ORDO_API_TOKEN if tests need a real token.
       # For this example, a dummy token is sufficient as it's for CI.
 
-    - name: Debug Python Path
-      run: python -c "import sys; print(sys.path)"
-
-    - name: Run tests
-      run: poetry run pytest tests/
-
-    - name: Run linter (Ruff)
-      run: poetry run ruff check src/ordo/
-
-    - name: Run formatter check (Black)
-      run: poetry run black --check src/ordo/
+    - name: Run tests, Linter, and Formatter
+      run: |
+        source $(poetry env info --path)/bin/activate
+        pytest tests/
+        ruff check src/ordo/
+        black --check src/ordo/
