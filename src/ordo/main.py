@@ -5,9 +5,11 @@ app = FastAPI()
 
 app.middleware("http")(authentication_middleware)
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
 
 @app.get("/protected")
 async def protected_route():
