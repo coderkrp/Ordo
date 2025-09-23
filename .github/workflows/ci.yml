@@ -21,14 +21,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python and Poetry
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12' # Ensure this matches your project's Python version
-        cache: 'poetry'
 
     - name: Install Poetry
-      run: pip install poetry
+      run: |
+        pip install poetry
+        echo "$(python -m site --user-base)/bin" >> $GITHUB_PATH
 
     - name: Install dependencies
       run: poetry install --no-interaction --no-root
