@@ -15,3 +15,4 @@ Instead of juggling different broker endpoints and quirks, Ordo gives developers
 ## Quickstart
 
 Get started with Ordo by following our comprehensive [Quickstart Guide](docs/quickstart.md).
+(A small change to activate CI pipeline)
