@@ -47,11 +47,11 @@ jobs:
       # For this example, a dummy token is sufficient as it's for CI.
 
     - name: Debug Poetry Env Path
-      run: echo "Poetry Env Path: $(poetry env info --path)"
+      run: echo "Poetry Env Path:$(poetry env info --path)"
 
     - name: Set PYTHONPATH
       run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
-      
+
     - name: Run tests, Linter, and Formatter
       run: |
         source $(poetry env info --path)/bin/activate
