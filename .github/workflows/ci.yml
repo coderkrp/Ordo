@@ -33,7 +33,9 @@ jobs:
         pipx install poetry
 
     - name: Install dependencies
-      run: poetry install --no-interaction --no-root --with dev
+      run: |
+        poetry lock --no-interaction
+        poetry install --no-interaction --no-root --with dev
 
     - name: Create .env file for tests
       run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
