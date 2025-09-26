@@ -28,5 +28,4 @@ Thumbs.db
 .uv/
 
 # BMad and Gemini specific directories
-.bmad-core/
 .gemini/
