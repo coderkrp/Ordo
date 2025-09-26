@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
 def get_adapter() -> IBrokerAdapter:
     if settings.BROKER_ADAPTER == "mock":
         return MockAdapter()

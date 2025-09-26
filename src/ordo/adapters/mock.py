@@ -1,7 +1,7 @@
-
 from typing import Any, Dict
 
 from .base import IBrokerAdapter
+
 
 class MockAdapter(IBrokerAdapter):
     """
@@ -31,7 +31,7 @@ class MockAdapter(IBrokerAdapter):
                         "last_price": 2850.50,
                         "pnl": 17525.00,
                         "day_pnl": 250.00,
-                        "value": 142525.00
+                        "value": 142525.00,
                     },
                     {
                         "symbol": "TCS-EQ",
@@ -41,7 +41,7 @@ class MockAdapter(IBrokerAdapter):
                         "last_price": 3800.00,
                         "pnl": 30000.00,
                         "day_pnl": -1500.00,
-                        "value": 380000.00
+                        "value": 380000.00,
                     },
                     {
                         "symbol": "HDFCBANK-EQ",
@@ -51,7 +51,7 @@ class MockAdapter(IBrokerAdapter):
                         "last_price": 1450.00,
                         "pnl": -10000.00,
                         "day_pnl": -2000.00,
-                        "value": 290000.00
+                        "value": 290000.00,
                     },
                     {
                         "symbol": "NIFTYBEES",
@@ -61,8 +61,8 @@ class MockAdapter(IBrokerAdapter):
                         "last_price": 225.00,
                         "pnl": 12500.00,
                         "day_pnl": 500.00,
-                        "value": 112500.00
-                    }
-                ]
-            }
+                        "value": 112500.00,
+                    },
+                ],
+            },
         }
