@@ -1,7 +1,7 @@
 # Story 1.1: API Authentication Middleware
 
 ## Status
-Approved
+Done
 
 ## Story
 **As a** developer,
