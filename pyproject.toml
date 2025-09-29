@@ -30,3 +30,9 @@ dev = [
     "respx (>=0.22.0,<0.23.0)",
     "pytest-asyncio (>=1.2.0,<2.0.0)"
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks a test as a unit test.",
+    "integration: marks a test as an integration test.",
+]
