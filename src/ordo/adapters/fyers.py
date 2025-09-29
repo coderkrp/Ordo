@@ -83,7 +83,9 @@ class FyersAdapter(IBrokerAdapter):
 
         return {"access_token": access_token}
 
-    async def refresh_access_token(self, session_data: Dict[str, Any], pin: str) -> Dict[str, Any]:
+    async def refresh_access_token(
+        self, session_data: Dict[str, Any], pin: str
+    ) -> Dict[str, Any]:
         """
         Refreshes the access token using the refresh token and PIN.
         """
