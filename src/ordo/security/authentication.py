@@ -35,7 +35,12 @@ async def authentication_middleware(request: Request, call_next):
     A FastAPI middleware that checks for a static bearer token in the Authorization header
     for all routes except the documentation.
     """
-    if request.url.path in ["/docs", "/openapi.json"]:
+    if request.url.path in [
+        "/docs",
+        "/openapi.json",
+        "/login/initiate",
+        "/login/complete",
+    ]:
         return await call_next(request)
 
     response = await verify_api_token(request)

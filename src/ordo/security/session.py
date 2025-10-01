@@ -1,16 +1,15 @@
 """Session management for broker adapters."""
 
 from cryptography.fernet import Fernet
-from ordo.config import settings
 
 
 class SessionManager:
     """Manages encrypted session data for broker adapters."""
 
-    def __init__(self):
-        if not settings.SECRET_KEY:
-            raise ValueError("SECRET_KEY must be set for session management.")
-        self._fernet = Fernet(settings.SECRET_KEY.encode())
+    def __init__(self, secret_key: str):
+        if not secret_key:
+            raise ValueError("SECRET_KEY must be provided for session management.")
+        self._fernet = Fernet(secret_key.encode())
         self._sessions = {}
 
     def _get_namespaced_key(self, broker_id: str, key: str) -> str:
