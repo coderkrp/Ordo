@@ -41,7 +41,12 @@ jobs:
         poetry install --no-interaction --with dev
 
     - name: Create .env file for tests
-      run: echo "ORDO_API_TOKEN=test-token-from-env" > .env
+      run: |
+        echo "ORDO_API_TOKEN=test-token-from-env" > .env
+        echo "SECRET_KEY=super-secret-test-key" >> .env
+        echo "FYERS_APP_ID=test-fyers-app-id" >> .env
+        echo "FYERS_SECRET_ID=test-fyers-secret-id" >> .env
+        echo "FYERS_REDIRECT_URI=http://localhost:8000/fyers-callback" >> .env
       # CRITICAL: In a real project, avoid hardcoding secrets.
       # Use GitHub Secrets for ORDO_API_TOKEN if tests need a real token.
       # For this example, a dummy token is sufficient as it's for CI.

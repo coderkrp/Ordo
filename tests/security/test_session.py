@@ -1,7 +1,6 @@
 """Tests for the SessionManager."""
 
 import pytest
-from unittest.mock import patch
 from cryptography.fernet import Fernet
 
 from ordo.security.session import SessionManager
@@ -10,33 +9,23 @@ from ordo.security.session import SessionManager
 TEST_SECRET_KEY = Fernet.generate_key().decode()
 
 
-@pytest.fixture
-def mock_settings():
-    """Fixture to mock the settings."""
-    with patch("ordo.security.session.settings") as mock_settings:
-        mock_settings.SECRET_KEY = TEST_SECRET_KEY
-        yield mock_settings
-
-
-def test_session_manager_init(mock_settings):
+def test_session_manager_init():
     """Test that the SessionManager initializes correctly."""
-    manager = SessionManager()
+    manager = SessionManager(TEST_SECRET_KEY)
     assert manager._fernet is not None
 
 
 def test_session_manager_init_no_key():
     """Test that SessionManager raises an error if SECRET_KEY is not set."""
-    with patch("ordo.security.session.settings") as mock_settings:
-        mock_settings.SECRET_KEY = None
-        with pytest.raises(
-            ValueError, match="SECRET_KEY must be set for session management."
-        ):
-            SessionManager()
+    with pytest.raises(
+        ValueError, match="SECRET_KEY must be provided for session management."
+    ):
+        SessionManager("")
 
 
-def test_set_and_get_session(mock_settings):
+def test_set_and_get_session():
     """Test setting and getting a session value."""
-    manager = SessionManager()
+    manager = SessionManager(TEST_SECRET_KEY)
     broker_id = "fyers"
     key = "access_token"
     value = "my_secret_token"
@@ -47,9 +36,9 @@ def test_set_and_get_session(mock_settings):
     assert retrieved_value == value
 
 
-def test_get_session_non_existent(mock_settings):
+def test_get_session_non_existent():
     """Test getting a non-existent session value."""
-    manager = SessionManager()
+    manager = SessionManager(TEST_SECRET_KEY)
     broker_id = "fyers"
     key = "non_existent_key"
 
@@ -58,9 +47,9 @@ def test_get_session_non_existent(mock_settings):
     assert retrieved_value is None
 
 
-def test_session_namespacing(mock_settings):
+def test_session_namespacing():
     """Test that session keys are namespaced by broker_id."""
-    manager = SessionManager()
+    manager = SessionManager(TEST_SECRET_KEY)
     broker_id_1 = "fyers"
     broker_id_2 = "zerodha"
     key = "access_token"

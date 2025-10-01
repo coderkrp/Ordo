@@ -123,7 +123,9 @@ async def test_refresh_access_token_success(mock_session_manager):
     assert result["access_token"] == "new_test_token"
 
     # Check that refresh token was retrieved and new access token was saved
-    mock_session_manager.get_session.assert_called_once_with("test_app_id", "refresh_token")
+    mock_session_manager.get_session.assert_called_once_with(
+        "test_app_id", "refresh_token"
+    )
     mock_session_manager.set_session.assert_called_once_with(
         "test_app_id", "access_token", "new_test_token"
     )

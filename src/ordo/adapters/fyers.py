@@ -3,11 +3,12 @@ import uuid
 from typing import Any, Dict
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ordo.adapters.base import IBrokerAdapter
 from ordo.models.api.errors import CSRFError
 from ordo.security.session import SessionManager
+from ordo.config import settings
 
 
 class FyersConfig(BaseModel):
@@ -26,14 +27,18 @@ class FyersAdapter(IBrokerAdapter):
     """
 
     def __init__(self):
-        self.base_url = "https://api.fyers.in/api/v3"
-        self.session_manager = SessionManager()
+        self.base_url = "https://api-t1.fyers.in/api/v3"
+        self.session_manager = SessionManager(settings.SECRET_KEY)
 
     async def initiate_login(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generates the Fyers login URL.
         """
-        config = FyersConfig(**credentials)
+        try:
+            config = FyersConfig(**credentials)
+        except ValidationError as e:
+            raise ValueError(f"Missing or invalid Fyers credentials: {e}")
+
         state = uuid.uuid4().hex
         self.session_manager.set_session(config.app_id, "state", state)
 
@@ -44,8 +49,11 @@ class FyersAdapter(IBrokerAdapter):
             f"response_type=code&"
             f"state={state}"
         )
-
-        return {"login_url": login_url}
+        response = {
+            "login_url": login_url,
+            "session_data": {"credentials": credentials, "state": state},
+        }
+        return response
 
     async def complete_login(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -61,7 +69,7 @@ class FyersAdapter(IBrokerAdapter):
             raise CSRFError("Invalid state")
 
         app_id_hash = hashlib.sha256(
-            f"{config.app_id}{config.secret_id}".encode()
+            f"{config.app_id}:{config.secret_id}".encode()
         ).hexdigest()
 
         async with httpx.AsyncClient() as client:
@@ -96,7 +104,7 @@ class FyersAdapter(IBrokerAdapter):
             raise ValueError("No refresh token found in session.")
 
         app_id_hash = hashlib.sha256(
-            f"{config.app_id}{config.secret_id}".encode()
+            f"{config.app_id}:{config.secret_id}".encode()
         ).hexdigest()
 
         async with httpx.AsyncClient() as client:
