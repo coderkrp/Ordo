@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch, call
 
 from ordo.adapters.base import IBrokerAdapter
 from ordo.adapters.fyers import FyersAdapter
-from ordo.models.api.errors import CSRFError
+from ordo.models.api.errors import CSRFError, ApiException
 
 
 @pytest.fixture
@@ -262,3 +262,153 @@ async def test_complete_login_csrf_error(mock_session_manager):
 
     with pytest.raises(CSRFError, match="Invalid state"):
         await adapter.complete_login(session_data)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_success(mock_session_manager):
+    """
+    Tests the success case for get_portfolio.
+    """
+    adapter = FyersAdapter()
+    holdings_url = f"{adapter.base_url}/holdings"
+    funds_url = f"{adapter.base_url}/funds"
+
+    holdings_response = {
+        "s": "ok",
+        "code": 200,
+        "message": "",
+        "holdings": [
+            {
+                "holdingType": "HLD",
+                "quantity": 1,
+                "costPrice": 1.55,
+                "marketVal": 3.75,
+                "remainingQuantity": 1,
+                "pl": 2.2,
+                "ltp": 3.75,
+                "id": 1,
+                "fyToken": 101000000011460,
+                "exchange": 10,
+                "symbol": "NSE:JPASSOCIAT-EQ",
+                "segment": 10,
+                "isin": "INE669E01016",
+                "qty_t1": 1,
+                "remainingPledgeQuantity": -1,
+                "collateralQuantity": 0,
+            }
+        ],
+        "overall": {
+            "count_total": 1,
+            "total_investment": 1.55,
+            "total_current_value": 3.75,
+            "total_pl": 2.2,
+            "pnl_perc": 141.94,
+        },
+    }
+
+    funds_response = {
+        "code": 200,
+        "message": "",
+        "s": "ok",
+        "fund_limit": [
+            {
+                "id": 1,
+                "title": "Total Balance",
+                "equityAmount": 10000,
+                "commodityAmount": 0,
+            },
+            {
+                "id": 2,
+                "title": "Utilized Amount",
+                "equityAmount": 2000,
+                "commodityAmount": 0,
+            },
+            {
+                "id": 10,
+                "title": "Available Balance",
+                "equityAmount": 8000,
+                "commodityAmount": 0,
+            },
+        ],
+    }
+
+    respx.get(holdings_url).mock(return_value=Response(200, json=holdings_response))
+    respx.get(funds_url).mock(return_value=Response(200, json=funds_response))
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    session_data = {
+        "credentials": {
+            "app_id": "test_app_id",
+            "secret_id": "test_secret_id",
+            "redirect_uri": "http://localhost:8000/callback",
+        }
+    }
+
+    result = await adapter.get_portfolio(session_data)
+
+    assert result["total_pnl"] == 2.2
+    assert result["total_value"] == 3.75
+    assert result["funds"]["available_balance"] == 8000
+    assert result["funds"]["margin_used"] == 2000
+    assert result["funds"]["total_balance"] == 10000
+    assert len(result["holdings"]) == 1
+    assert result["holdings"][0]["symbol"] == "NSE:JPASSOCIAT-EQ"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_api_error(mock_session_manager):
+    """
+    Tests that get_portfolio handles API errors.
+    """
+    adapter = FyersAdapter()
+    url = f"{adapter.base_url}/holdings"
+    respx.get(url).mock(return_value=Response(400, json={"message": "Invalid request"}))
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    session_data = {
+        "credentials": {
+            "app_id": "test_app_id",
+            "secret_id": "test_secret_id",
+            "redirect_uri": "http://localhost:8000/callback",
+        }
+    }
+
+    with pytest.raises(ApiException) as excinfo:
+        await adapter.get_portfolio(session_data)
+
+    assert excinfo.value.error.error_code == "BROKER_API_ERROR"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_logical_error(mock_session_manager):
+    """
+    Tests that get_portfolio handles logical errors from the API (200 OK with s != 'ok').
+    """
+    adapter = FyersAdapter()
+    holdings_url = f"{adapter.base_url}/holdings"
+    respx.get(holdings_url).mock(
+        return_value=Response(200, json={"s": "error", "message": "Invalid request"})
+    )
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    session_data = {
+        "credentials": {
+            "app_id": "test_app_id",
+            "secret_id": "test_secret_id",
+            "redirect_uri": "http://localhost:8000/callback",
+        }
+    }
+
+    with pytest.raises(ApiException) as excinfo:
+        await adapter.get_portfolio(session_data)
+
+    assert excinfo.value.error.error_code == "BROKER_API_ERROR"

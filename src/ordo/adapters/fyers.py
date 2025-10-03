@@ -6,7 +6,8 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from ordo.adapters.base import IBrokerAdapter
-from ordo.models.api.errors import CSRFError
+from ordo.models.api.errors import ApiError, ApiException, CSRFError
+from ordo.models.api.portfolio import Portfolio, Holding, Funds
 from ordo.security.session import SessionManager
 from ordo.config import settings
 
@@ -154,4 +155,91 @@ class FyersAdapter(IBrokerAdapter):
         """
         Retrieves the portfolio from Fyers.
         """
-        raise NotImplementedError
+        config = FyersConfig(**session_data["credentials"])
+        access_token = self.session_manager.get_session(config.app_id, "access_token")
+
+        if not access_token:
+            raise ValueError("No access token found in session.")
+
+        headers = {"Authorization": f"{config.app_id}:{access_token}"}
+        holdings_url = f"{self.base_url}/holdings"
+        funds_url = f"{self.base_url}/funds"
+
+        async with httpx.AsyncClient() as client:
+            try:
+                holdings_response = await client.get(holdings_url, headers=headers)
+                holdings_response.raise_for_status()
+                holdings_data = holdings_response.json()
+                if holdings_data.get("s") != "ok":
+                    raise ApiException(
+                        ApiError(
+                            error_code="BROKER_API_ERROR",
+                            message=f"Fyers holdings error: {holdings_data.get('message', 'Unknown error')}",
+                            details={"response": holdings_data},
+                        )
+                    )
+
+                funds_response = await client.get(funds_url, headers=headers)
+                funds_response.raise_for_status()
+                funds_data = funds_response.json()
+                if funds_data.get("s") != "ok":
+                    raise ApiException(
+                        ApiError(
+                            error_code="BROKER_API_ERROR",
+                            message=f"Fyers funds error: {funds_data.get('message', 'Unknown error')}",
+                            details={"response": funds_data},
+                        )
+                    )
+
+            except httpx.HTTPStatusError as e:
+                raise ApiException(
+                    ApiError(
+                        error_code="BROKER_API_ERROR",
+                        message=f"Fyers API error: {e.response.text}",
+                        details={"status_code": e.response.status_code},
+                    )
+                )
+            except ApiException:
+                raise
+            except Exception as e:
+                raise ApiException(
+                    ApiError(
+                        error_code="BROKER_REQUEST_FAILED",
+                        message=f"Failed to retrieve portfolio from Fyers: {e}",
+                    )
+                )
+
+        # Transform holdings
+        holdings = [
+            Holding(
+                symbol=h["symbol"],
+                quantity=h["quantity"],
+                ltp=h["ltp"],
+                avg_price=h["costPrice"],
+                pnl=h["pl"],
+                day_pnl=0,  # Not available in Fyers API
+                value=h["marketVal"],
+            )
+            for h in holdings_data.get("holdings", [])
+        ]
+
+        # Transform funds
+        funds_map = {item["title"]: item for item in funds_data.get("fund_limit", [])}
+        funds = Funds(
+            available_balance=funds_map.get("Available Balance", {}).get(
+                "equityAmount", 0
+            ),
+            margin_used=funds_map.get("Utilized Amount", {}).get("equityAmount", 0),
+            total_balance=funds_map.get("Total Balance", {}).get("equityAmount", 0),
+        )
+
+        # Create portfolio
+        portfolio = Portfolio(
+            holdings=holdings,
+            funds=funds,
+            total_pnl=holdings_data.get("overall", {}).get("total_pl", 0),
+            total_day_pnl=0,  # Not available in Fyers API
+            total_value=holdings_data.get("overall", {}).get("total_current_value", 0),
+        )
+
+        return portfolio.model_dump()
