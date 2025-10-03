@@ -383,3 +383,32 @@ async def test_get_portfolio_api_error(mock_session_manager):
         await adapter.get_portfolio(session_data)
 
     assert excinfo.value.error.error_code == "BROKER_API_ERROR"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_logical_error(mock_session_manager):
+    """
+    Tests that get_portfolio handles logical errors from the API (200 OK with s != 'ok').
+    """
+    adapter = FyersAdapter()
+    holdings_url = f"{adapter.base_url}/holdings"
+    respx.get(holdings_url).mock(
+        return_value=Response(200, json={"s": "error", "message": "Invalid request"})
+    )
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    session_data = {
+        "credentials": {
+            "app_id": "test_app_id",
+            "secret_id": "test_secret_id",
+            "redirect_uri": "http://localhost:8000/callback",
+        }
+    }
+
+    with pytest.raises(ApiException) as excinfo:
+        await adapter.get_portfolio(session_data)
+
+    assert excinfo.value.error.error_code == "BROKER_API_ERROR"
