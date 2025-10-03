@@ -21,6 +21,7 @@ Done
 - [x] Add error handling for Fyers API errors.
 
 ## File List
+
 - `src/ordo/adapters/fyers.py`
 - `src/ordo/models/api/portfolio.py`
 - `src/ordo/exceptions.py`
