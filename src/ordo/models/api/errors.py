@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
 import uuid
+from ordo.exceptions import OrdoError
 
 
 class ApiError(BaseModel):
@@ -18,7 +19,13 @@ class ApiError(BaseModel):
     )
 
 
-class SecurityException(Exception):
+class ApiException(OrdoError):
+    def __init__(self, error: ApiError):
+        self.error = error
+        super().__init__(error.message)
+
+
+class SecurityException(OrdoError):
     """Base exception for security-related errors."""
 
     pass
