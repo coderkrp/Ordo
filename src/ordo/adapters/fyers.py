@@ -170,10 +170,26 @@ class FyersAdapter(IBrokerAdapter):
                 holdings_response = await client.get(holdings_url, headers=headers)
                 holdings_response.raise_for_status()
                 holdings_data = holdings_response.json()
+                if holdings_data.get("s") != "ok":
+                    raise ApiException(
+                        ApiError(
+                            error_code="BROKER_API_ERROR",
+                            message=f"Fyers holdings error: {holdings_data.get('message', 'Unknown error')}",
+                            details={"response": holdings_data},
+                        )
+                    )
 
                 funds_response = await client.get(funds_url, headers=headers)
                 funds_response.raise_for_status()
                 funds_data = funds_response.json()
+                if funds_data.get("s") != "ok":
+                    raise ApiException(
+                        ApiError(
+                            error_code="BROKER_API_ERROR",
+                            message=f"Fyers funds error: {funds_data.get('message', 'Unknown error')}",
+                            details={"response": funds_data},
+                        )
+                    )
 
             except httpx.HTTPStatusError as e:
                 raise ApiException(
@@ -183,6 +199,8 @@ class FyersAdapter(IBrokerAdapter):
                         details={"status_code": e.response.status_code},
                     )
                 )
+            except ApiException:
+                raise
             except Exception as e:
                 raise ApiException(
                     ApiError(
