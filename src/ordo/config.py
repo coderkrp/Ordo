@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     FYERS_SECRET_ID: Optional[str] = None
     FYERS_REDIRECT_URI: Optional[str] = None
 
+    HDFC_API_KEY: Optional[str] = None
+    HDFC_USERNAME: Optional[str] = None
+    HDFC_PASSWORD: Optional[str] = None
+    HDFC_API_SECRET: Optional[str] = None
+
 
 settings = Settings()
 
@@ -31,5 +36,11 @@ def get_adapter(broker: Optional[str] = None) -> IBrokerAdapter:
         )  # Local import to break circular dependency
 
         return FyersAdapter()
+    if adapter_name == "hdfc":
+        from ordo.adapters.hdfc import (
+            HDFCAdapter,
+        )  # Local import to break circular dependency
+
+        return HDFCAdapter()
     # Add other adapters here as they are implemented
     raise ValueError(f"Unknown adapter: {adapter_name}")
