@@ -1,7 +1,7 @@
 # Story 2.1: HDFC Securities Adapter
 
 ## Status
-Draft
+Approved
 
 ## Story
 **As a** developer,
@@ -16,7 +16,7 @@ Draft
 5. Includes unit tests using mocked broker API responses to cover successful and failed scenarios for all functions.
 
 ## Tasks / Subtasks
-- [ ] Create `src/ordo/adapters/hdfc.py`.
+- [x] Create `src/ordo/adapters/hdfc.py`.
 - [ ] Implement `initiate_login` and `complete_login`.
 - [ ] Implement `get_portfolio`.
 - [ ] Implement `place_order`.
@@ -30,7 +30,14 @@ Draft
 ### Testing
 - A full suite of integration tests mocking the HDFC API is required to ensure compliance with the adapter contract.
 
+## QA Notes
+- Risk profile: docs/qa/assessments/2.1-risk-20251003.md
+
+## File List
+- src/ordo/adapters/hdfc.py
+
 ## Change Log
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
 | 2025-09-22 | 1.0 | Initial draft | Sarah (PO) |
+| 2025-10-03 | 1.1 | Risk profile added | Quinn (QA) |
