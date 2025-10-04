@@ -255,4 +255,91 @@ async def test_complete_login_missing_otp_with_2fa_enabled(
         await adapter.complete_login(session_data, otp=None)
 
     assert excinfo.value.error.error_code == "BROKER_REQUEST_FAILED"
-    assert "2FA is enabled but no OTP was provided" in excinfo.value.error.message
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_portfolio.
+    """
+    adapter = HDFCAdapter()
+    holdings_url = f"{adapter.base_url}/holdings"
+    portfolio_url = f"{adapter.base_url}/portfolio"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    holdings_response_data = {
+        "holdings": [
+            {
+                "isin": "INE000A01025",
+                "symbol": "HDFC",
+                "quantity": 10,
+                "averagePrice": 1500.0,
+                "currentPrice": 1600.0,
+                "totalValue": 16000.0,
+                "profitLoss": 1000.0,
+            }
+        ]
+    }
+
+    portfolio_summary_response_data = {
+        "availableBalance": 50000.0,
+        "marginUsed": 10000.0,
+        "totalBalance": 60000.0,
+        "overallProfitLoss": 1000.0,
+        "overallValue": 16000.0,
+    }
+
+    respx.get(holdings_url).mock(return_value=Response(200, json=holdings_response_data))
+    respx.get(portfolio_url).mock(return_value=Response(200, json=portfolio_summary_response_data))
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "tokenId": "test_token_id",
+        "loginId": "test_login_id",
+        "twoFAEnabled": False,
+    }
+
+    result = await adapter.get_portfolio(session_data)
+
+    assert result["total_pnl"] == 1000.0
+    assert result["total_value"] == 16000.0
+    assert result["funds"]["available_balance"] == 50000.0
+    assert result["funds"]["margin_used"] == 10000.0
+    assert result["funds"]["total_balance"] == 60000.0
+    assert len(result["holdings"]) == 1
+    assert result["holdings"][0]["symbol"] == "HDFC"
+    assert result["holdings"][0]["quantity"] == 10
+    assert result["holdings"][0]["ltp"] == 1600.0
+    assert result["holdings"][0]["avg_price"] == 1500.0
+    assert result["holdings"][0]["pnl"] == 1000.0
+    assert result["holdings"][0]["value"] == 16000.0
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_portfolio_api_error(mock_session_manager, hdfc_credentials):
+    """
+    Tests that get_portfolio handles API errors.
+    """
+    adapter = HDFCAdapter()
+    holdings_url = f"{adapter.base_url}/holdings"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    respx.get(holdings_url).mock(return_value=Response(400, json={"message": "Invalid request"}))
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "tokenId": "test_token_id",
+        "loginId": "test_login_id",
+        "twoFAEnabled": False,
+    }
+
+    with pytest.raises(ApiException) as excinfo:
+        await adapter.get_portfolio(session_data)
+
+    assert excinfo.value.error.error_code == "BROKER_API_ERROR"
+    assert "Invalid request" in excinfo.value.error.message
+

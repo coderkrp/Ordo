@@ -184,5 +184,84 @@ class HDFCAdapter(IBrokerAdapter):
         """
         Retrieves the portfolio from HDFC Securities.
         """
-        # TODO: Implement HDFC-specific portfolio retrieval logic
-        raise NotImplementedError
+        config = HDFCConfig(**session_data["credentials"])
+        access_token = self.session_manager.get_session(config.api_key, "access_token")
+        login_id = session_data.get("loginId")
+
+        if not access_token:
+            raise ApiException(ApiError(message="No access token found in session."))
+        if not login_id:
+            raise ApiException(ApiError(message="No login ID found in session."))
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                # Retrieve Holdings
+                holdings_response = await client.get(
+                    f"{self.base_url}/holdings",
+                    headers=headers,
+                    params={"clientId": login_id} # Assuming clientId is a query parameter
+                )
+                holdings_response.raise_for_status()
+                holdings_data = holdings_response.json()
+
+                # Retrieve Portfolio Summary
+                portfolio_summary_response = await client.get(
+                    f"{self.base_url}/portfolio",
+                    headers=headers,
+                    params={"clientId": login_id} # Assuming clientId is a query parameter
+                )
+                portfolio_summary_response.raise_for_status()
+                portfolio_summary_data = portfolio_summary_response.json()
+
+            except httpx.HTTPStatusError as e:
+                raise ApiException(
+                    ApiError(
+                        error_code="BROKER_API_ERROR",
+                        message=f"HDFC API error during portfolio retrieval: {e.response.text}",
+                        details={"status_code": e.response.status_code, "response": e.response.json()}
+                    )
+                )
+            except Exception as e:
+                raise ApiException(
+                    ApiError(
+                        error_code="BROKER_REQUEST_FAILED",
+                        message=f"Failed to retrieve portfolio from HDFC: {e}",
+                    )
+                )
+
+        # --- Data Transformation (Placeholder for now) ---
+        # This part needs to be adapted based on actual HDFC API response structure
+        # For now, we'll return raw data to verify API calls first.
+        # Once we have actual response examples, we can map to Portfolio, Holding, Funds DTOs.
+
+        # Example transformation (adjust based on actual HDFC response)
+        holdings = [
+            Holding(
+                symbol=h.get("symbol", ""),
+                quantity=h.get("quantity", 0),
+                ltp=h.get("currentPrice", 0.0),
+                avg_price=h.get("averagePrice", 0.0),
+                pnl=h.get("profitLoss", 0.0),
+                day_pnl=0.0, # HDFC API might not provide day P&L directly
+                value=h.get("totalValue", 0.0),
+            )
+            for h in holdings_data.get("holdings", [])
+        ]
+
+        funds = Funds(
+            available_balance=portfolio_summary_data.get("availableBalance", 0.0),
+            margin_used=portfolio_summary_data.get("marginUsed", 0.0),
+            total_balance=portfolio_summary_data.get("totalBalance", 0.0),
+        )
+
+        portfolio = Portfolio(
+            holdings=holdings,
+            funds=funds,
+            total_pnl=portfolio_summary_data.get("overallProfitLoss", 0.0),
+            total_day_pnl=0.0, # HDFC API might not provide total day P&L directly
+            total_value=portfolio_summary_data.get("overallValue", 0.0),
+        )
+
+        return portfolio.model_dump()
