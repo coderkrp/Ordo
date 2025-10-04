@@ -27,5 +27,5 @@ Thumbs.db
 # uv
 .uv/
 
-# BMad and Gemini specific directories
+# Gemini specific directories
 .gemini/

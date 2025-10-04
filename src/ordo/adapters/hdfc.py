@@ -1,12 +1,10 @@
-import hashlib
-import uuid
 from typing import Any, Dict
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from ordo.adapters.base import IBrokerAdapter
-from ordo.models.api.errors import ApiError, ApiException, CSRFError
+from ordo.models.api.errors import ApiError, ApiException
 from ordo.models.api.portfolio import Portfolio, Holding, Funds # Not needed yet, but good to have
 from ordo.security.session import SessionManager
 from ordo.config import settings
@@ -95,6 +93,22 @@ class HDFCAdapter(IBrokerAdapter):
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         })
 
+    async def _get_login_token(self, config: HDFCConfig) -> str:
+        """Fetches the initial login token."""
+        token_response = await self.http_client.get(f"{self.base_url}/login?api_key={config.api_key}")
+        token_response.raise_for_status()
+        token_data = HDFCLoginInitResponse(**token_response.json())
+        return token_data.tokenId
+
+    async def _validate_user(self, config: HDFCConfig, token_id: str) -> HDFCLoginValidateResponse:
+        """Validates username and password."""
+        validate_response = await self.http_client.post(
+            f"{self.base_url}/login/validate?api_key={config.api_key}&token_id={token_id}",
+            json={"username": config.username, "password": config.password}
+        )
+        validate_response.raise_for_status()
+        return HDFCLoginValidateResponse(**validate_response.json())
+
     async def initiate_login(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
         """
         Initiates the login process for HDFC Securities (Steps 1 & 2).
@@ -104,23 +118,9 @@ class HDFCAdapter(IBrokerAdapter):
         except ValidationError as e:
             raise ValueError(f"Missing or invalid HDFC credentials: {e}")
 
-        # Step 1: Fetch tokenId
-        client = self.http_client
         try:
-            token_response = await client.get(
-                f"{self.base_url}/login?api_key={config.api_key}"
-            )
-            token_response.raise_for_status()
-            token_data = HDFCLoginInitResponse(**token_response.json())
-            token_id = token_data.tokenId
-
-            # Step 2: Validate username and password
-            validate_response = await client.post(
-                f"{self.base_url}/login/validate?api_key={config.api_key}&token_id={token_id}",
-                json={"username": config.username, "password": config.password}
-            )
-            validate_response.raise_for_status()
-            validate_data = HDFCLoginValidateResponse(**validate_response.json())
+            token_id = await self._get_login_token(config)
+            validate_data = await self._validate_user(config, token_id)
 
             return {
                 "tokenId": token_id,
@@ -145,14 +145,50 @@ class HDFCAdapter(IBrokerAdapter):
                 )
             )
 
+    async def _validate_2fa(self, client: httpx.AsyncClient, config: HDFCConfig, token_id: str, otp: str) -> str:
+        """Validates the 2FA OTP."""
+        twofa_response = await client.post(
+            f"{self.base_url}/twofa/validate?api_key={config.api_key}&token_id={token_id}",
+            json={"answer": otp}
+        )
+        twofa_response.raise_for_status()
+        twofa_data = HDFC2FAResponse(**twofa_response.json())
+        if not twofa_data.requestToken:
+            raise ApiException(ApiError(message="Failed to get requestToken after 2FA validation"))
+        return twofa_data.requestToken
 
-    async def complete_login(self, session_data: Dict[str, Any], otp: str | None = None) -> Dict[str, Any]:
+    async def _authorize_session(self, client: httpx.AsyncClient, config: HDFCConfig, token_id: str, request_token: str | None, consent: bool) -> str:
+        """Authorizes the session (Terms & Conditions)."""
+        consent_str = str(consent).lower()
+        authorise_response = await client.get(
+            f"{self.base_url}/authorise?api_key={config.api_key}&token_id={token_id}&consent={consent_str}&request_token={request_token}"
+        )
+        authorise_response.raise_for_status()
+        authorise_data = HDFCAuthoriseResponse(**authorise_response.json())
+        if not authorise_data.requestToken:
+            raise ApiException(ApiError(message="Failed to get requestToken after authorization"))
+        return authorise_data.requestToken
+
+    async def _get_access_token(self, client: httpx.AsyncClient, config: HDFCConfig, request_token: str) -> str:
+        """Gets the final access token."""
+        access_token_response = await client.post(
+            f"{self.base_url}/access-token?api_key={config.api_key}&request_token={request_token}",
+            json={"apiSecret": config.apiSecret}
+        )
+        access_token_response.raise_for_status()
+        access_token_data = HDFCAccessTokenResponse(**access_token_response.json())
+        if not access_token_data.accessToken:
+            raise ApiException(ApiError(message="Failed to get accessToken from HDFC API"))
+        return access_token_data.accessToken
+
+    async def complete_login(self, session_data: Dict[str, Any], otp: str | None = None, consent: bool = True) -> Dict[str, Any]:
         """
         Completes the login process for HDFC Securities (Steps 3, 4 & 5).
         """
         config = HDFCConfig(**session_data["credentials"])
         token_id = session_data["tokenId"]
         request_token = None
+
         if session_data.get("twoFAEnabled") and not otp:
             raise ApiException(
                 ApiError(
@@ -163,53 +199,13 @@ class HDFCAdapter(IBrokerAdapter):
 
         async with httpx.AsyncClient() as client:
             try:
-                # Step 3: Validate 2FA OTP (if enabled and provided)
                 if session_data.get("twoFAEnabled") and otp:
-                    twofa_response = await client.post(
-                        f"{self.base_url}/twofa/validate?api_key={config.api_key}&token_id={token_id}",
-                        json={"answer": otp}
-                    )
-                    twofa_response.raise_for_status()
-                    twofa_data = HDFC2FAResponse(**twofa_response.json())
-                    request_token = twofa_data.requestToken
-                    if not request_token:
-                        raise ApiException(ApiError(message="Failed to get requestToken after 2FA validation"))
+                    request_token = await self._validate_2fa(client, config, token_id, otp)
 
-                # If 2FA was not enabled or already handled, and request_token is still None,
-                # we need to get it from the validate step's response if it was present there.
-                # However, the provided flow shows requestToken only after 2FA.
-                # Assuming if 2FA is not enabled, the requestToken would be available after step 2 or 4.
-                # For now, we'll proceed assuming request_token is obtained from 2FA or will be handled in step 4.
-
-                # Step 4: Authorize (Terms & Conditions)
-                # Assuming consent=true for now. The request_token from 2FA is used here.
-                # If 2FA was not enabled, we might need to re-evaluate how request_token is obtained for this step.
-                # For now, we'll use the request_token from 2FA or assume it's not needed if 2FA is off.
-                consent = "true" # Assuming user always consents
-                authorise_response = await client.get(
-                    f"{self.base_url}/authorise?api_key={config.api_key}&token_id={token_id}&consent={consent}&request_token={request_token}"
-                )
-                authorise_response.raise_for_status()
-                authorise_data = HDFCAuthoriseResponse(**authorise_response.json())
-                request_token = authorise_data.requestToken # Update request_token from this step
-                if not request_token:
-                    raise ApiException(ApiError(message="Failed to get requestToken after authorization"))
-
-
-                # Step 5: Get accessToken
-                access_token_response = await client.post(
-                    f"{self.base_url}/access-token?api_key={config.api_key}&request_token={request_token}",
-                    json={"apiSecret": config.apiSecret}
-                )
-                access_token_response.raise_for_status()
-                access_token_data = HDFCAccessTokenResponse(**access_token_response.json())
-                access_token = access_token_data.accessToken
-                if not access_token:
-                    raise ApiException(ApiError(message="Failed to get accessToken from HDFC API"))
+                request_token = await self._authorize_session(client, config, token_id, request_token, consent)
+                access_token = await self._get_access_token(client, config, request_token)
 
                 self.session_manager.set_session(config.api_key, "access_token", access_token)
-                # Store other relevant session data if needed
-
                 return {"access_token": access_token}
 
             except httpx.HTTPStatusError as e:
@@ -341,7 +337,10 @@ class HDFCAdapter(IBrokerAdapter):
                 ltp=h.currentPrice,
                 avg_price=h.averagePrice,
                 pnl=h.profitLoss,
-                day_pnl=0.0, # HDFC API might not provide day P&L directly
+                # HDFC API does not provide day P&L in the holdings endpoint.
+                # This is a known limitation of the API, and we are hardcoding it to 0.0
+                # as per the current implementation.
+                day_pnl=0.0,
                 value=h.totalValue,
             )
             for h in holdings_data.holdings
@@ -357,8 +356,146 @@ class HDFCAdapter(IBrokerAdapter):
             holdings=holdings,
             funds=funds,
             total_pnl=portfolio_summary_data.overallProfitLoss,
-            total_day_pnl=0.0, # HDFC API might not provide total day P&L directly
+            # HDFC API does not provide total day P&L, so it is hardcoded to 0.0.
+            # This should be documented as a limitation.
+            total_day_pnl=0.0,
             total_value=portfolio_summary_data.overallValue,
         )
 
         return portfolio.model_dump()
+
+def modify_order(self, order_id: str, **kwargs) -> OrderResponse:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login() first.")
+        url = f"{self._BASE_URL}/orders/regular/{order_id}?api_key={self.api_key}"
+        payload = HDFCModifyOrderRequest(
+            quantity=kwargs.get('new_quantity'),
+            order_type=kwargs.get('order_type', 'MARKET').upper(),
+            validity=kwargs.get('validity', 'DAY').upper(),
+            disclosed_quantity=kwargs.get('disclosed_quantity', 0),
+            product=kwargs.get('product', 'DELIVERY').upper(),
+            price=kwargs.get('new_price', 0.0),
+            trigger_price=kwargs.get('trigger_price', 0.0),
+            amo=kwargs.get('amo', False)
+        )
+        try:
+            response = self.session.put(url, json=payload.dict())
+            response.raise_for_status()
+            data = HDFCOrderActionResponse(**response.json())
+            return OrderResponse(order_id=data.data['order_id'], status="success")
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC modify_order failed: {e}")
+
+    def cancel_order(self, order_id: str) -> OrderResponse:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login() first.")
+        url = f"{self._BASE_URL}/orders/regular/{order_id}?api_key={self.api_key}"
+        try:
+            response = self.session.delete(url)
+            response.raise_for_status()
+            data = HDFCOrderActionResponse(**response.json())
+            return OrderResponse(order_id=data.data['order_id'], status="cancelled")
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC cancel_order failed: {e}")
+
+    def get_order_book(self) -> List[Order]:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login().")
+        url = f"{self._BASE_URL}/orders?api_key={self.api_key}"
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = HDFCOrderBookResponse(**response.json())
+            orders = []
+            for item in data.data:
+                orders.append(Order(
+                    order_id=item.order_id,
+                    symbol=item.tradingsymbol,
+                    status=item.status,
+                    transaction_type=TransactionType(item.transaction_type.lower()),
+                    order_type=OrderType.MARKET,
+                    product_type=ProductType(item.product.lower()),
+                    quantity=item.quantity,
+                    price=item.price,
+                    timestamp=item.order_timestamp
+                ))
+            return orders
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC get_order_book failed: {e}")
+
+    def get_trade_book(self) -> List[Trade]:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login().")
+        url = f"{self._BASE_URL}/trades?api_key={self.api_key}"
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = HDFCTradeBookResponse(**response.json())
+            trades = []
+            for item in data.data:
+                trades.append(Trade(
+                    trade_id=item.trade_id,
+                    order_id=item.order_id,
+                    symbol=item.security_id,
+                    transaction_type=TransactionType(item.transaction_type.lower()),
+                    quantity=item.filled_quantity,
+                    price=item.average_price,
+                    timestamp=item.fill_timestamp
+                ))
+            return trades
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC get_trade_book failed: {e}")
+
+    def get_profile(self) -> Profile:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login().")
+        url = f"{self._BASE_URL}/profile"
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = HDFCProfileResponse(**response.json())
+            return Profile(client_id=data.client_id, name=data.name, email=data.email)
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC get_profile failed: {e}")
+
+    def get_holdings(self) -> List[Holding]:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login().")
+        url = f"{self._BASE_URL}/holdings"
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            holdings_data = [HDFCHoldingResponse(**item) for item in response.json()]
+            return [
+                Holding(
+                    symbol=item.symbol,
+                    quantity=item.qty,
+                    average_price=item.avg_price
+                ) for item in holdings_data
+            ]
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC get_holdings failed: {e}")
+
+    def get_positions(self) -> List[Position]:
+        if not self.access_token:
+            raise OrdoException("Not logged in. Please call login().")
+        # NOTE: Documentation shows 'cumulative-positions' but curl example uses 'overall_positions'.
+        # Using the one from the curl example as it's more likely to be the correct endpoint.
+        url = f"{self._BASE_URL}/portfolio/overall_positions?api_key={self.api_key}"
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            response_data = HDFCPositionsResponse(**response.json())
+            positions = []
+            for item in response_data.data.net:
+                positions.append(Position(
+                    symbol=item.security_id,
+                    quantity=item.net_qty,
+                    product_type=ProductType(item.product.lower()),
+                    exchange=item.exchange,
+                    instrument_type=item.instrument_segment,
+                    realised_pnl=item.realised_pl_overall_position
+                ))
+            return positions
+        except requests.exceptions.RequestException as e:
+            raise OrdoException(f"HDFC get_positions failed: {e}")

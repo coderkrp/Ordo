@@ -1,11 +1,11 @@
 import pytest
 import respx
 from httpx import Response
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from ordo.adapters.base import IBrokerAdapter
-from ordo.adapters.hdfc import HDFCAdapter, HDFCConfig
-from ordo.models.api.errors import ApiException, ApiError
+from ordo.adapters.hdfc import HDFCAdapter
+from ordo.models.api.errors import ApiException
 
 
 @pytest.fixture
