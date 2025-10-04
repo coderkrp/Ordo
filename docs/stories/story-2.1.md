@@ -17,7 +17,7 @@ Approved
 
 ## Tasks / Subtasks
 - [x] Create `src/ordo/adapters/hdfc.py`.
-- [ ] Implement `initiate_login` and `complete_login`.
+- [x] Implement `initiate_login` and `complete_login`.
 - [ ] Implement `get_portfolio`.
 - [ ] Implement `place_order`.
 - [ ] Add `HDFCConfig` to the configuration models.
