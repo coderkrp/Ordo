@@ -151,7 +151,7 @@ async def test_complete_login_success_no_2fa(mock_session_manager, hdfc_credenti
     # Mock Step 4: Authorize (assuming request_token is obtained from previous step or not needed)
     respx.get(
         f"{adapter.base_url}/authorise?api_key={hdfc_credentials['api_key']}&token_id=test_token_id&consent=true&request_token=None"
-    ).mock(return_value=Response(200, json={"requestToken": "test_request_token"}))
+    ).mock(return_value=Response(200, json={"callbackUrl": "https://example.com", "requestToken": "test_request_token"}))
 
     # Mock Step 5: Get accessToken
     respx.post(
@@ -185,12 +185,12 @@ async def test_complete_login_success_with_2fa(mock_session_manager, hdfc_creden
     # Mock Step 3: Validate 2FA OTP
     respx.post(
         f"{adapter.base_url}/twofa/validate?api_key={hdfc_credentials['api_key']}&token_id=test_token_id"
-    ).mock(return_value=Response(200, json={"requestToken": "2fa_request_token"}))
+    ).mock(return_value=Response(200, json={"requestToken": "2fa_request_token", "termsAndConditions": {}, "authorised": True}))
 
     # Mock Step 4: Authorize
     respx.get(
         f"{adapter.base_url}/authorise?api_key={hdfc_credentials['api_key']}&token_id=test_token_id&consent=true&request_token=2fa_request_token"
-    ).mock(return_value=Response(200, json={"requestToken": "final_request_token"}))
+    ).mock(return_value=Response(200, json={"callbackUrl": "https://example.com", "requestToken": "final_request_token"}))
 
     # Mock Step 5: Get accessToken
     respx.post(
@@ -256,6 +256,7 @@ async def test_complete_login_missing_otp_with_2fa_enabled(
 
     assert excinfo.value.error.error_code == "BROKER_REQUEST_FAILED"
 
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 @respx.mock
@@ -316,6 +317,7 @@ async def test_get_portfolio_success(mock_session_manager, hdfc_credentials):
     assert result["holdings"][0]["pnl"] == 1000.0
     assert result["holdings"][0]["value"] == 16000.0
 
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 @respx.mock
@@ -343,3 +345,113 @@ async def test_get_portfolio_api_error(mock_session_manager, hdfc_credentials):
     assert excinfo.value.error.error_code == "BROKER_API_ERROR"
     assert "Invalid request" in excinfo.value.error.message
 
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_place_order_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for place_order.
+    """
+    adapter = HDFCAdapter()
+    place_order_url = f"{adapter.base_url}/order/place"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    order_details = {
+        "orderType": "BUY",
+        "exchange": "NSE",
+        "segment": "EQUITY",
+        "productType": "CNC",
+        "instrumentToken": "12345",
+        "quantity": 10,
+        "price": 100.0,
+    }
+
+    respx.post(place_order_url).mock(
+        return_value=Response(200, json={"orderId": "ORDER123", "status": "success"})
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "tokenId": "test_token_id",
+        "loginId": "test_login_id",
+        "twoFAEnabled": False,
+    }
+
+    result = await adapter.place_order(session_data, order_details)
+
+    assert result["orderId"] == "ORDER123"
+    assert result["status"] == "success"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_place_order_api_error(mock_session_manager, hdfc_credentials):
+    """
+    Tests that place_order handles API errors.
+    """
+    adapter = HDFCAdapter()
+    place_order_url = f"{adapter.base_url}/order/place"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    order_details = {
+        "orderType": "BUY",
+        "exchange": "NSE",
+        "segment": "EQUITY",
+        "productType": "CNC",
+        "instrumentToken": "12345",
+        "quantity": 10,
+        "price": 100.0,
+    }
+
+    respx.post(place_order_url).mock(
+        return_value=Response(400, json={"message": "Invalid order parameters"})
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "tokenId": "test_token_id",
+        "loginId": "test_login_id",
+        "twoFAEnabled": False,
+    }
+
+    with pytest.raises(ApiException) as excinfo:
+        await adapter.place_order(session_data, order_details)
+
+    assert excinfo.value.error.error_code == "BROKER_API_ERROR"
+    assert "Invalid order parameters" in excinfo.value.error.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_place_order_invalid_details(mock_session_manager, hdfc_credentials):
+    """
+    Tests that place_order handles invalid order details (Pydantic validation error).
+    """
+    adapter = HDFCAdapter()
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    order_details = {
+        "orderType": "BUY",
+        "exchange": "NSE",
+        "segment": "EQUITY",
+        "productType": "CNC",
+        "instrumentToken": "12345",
+        "quantity": "invalid_quantity", # Invalid type
+    }
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "tokenId": "test_token_id",
+        "loginId": "test_login_id",
+        "twoFAEnabled": False,
+    }
+
+    with pytest.raises(ValueError) as excinfo:
+        await adapter.place_order(session_data, order_details)
+
+    assert "Invalid order details" in str(excinfo.value)

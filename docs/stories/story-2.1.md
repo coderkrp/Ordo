@@ -19,9 +19,9 @@ Approved
 - [x] Create `src/ordo/adapters/hdfc.py`.
 - [x] Implement `initiate_login` and `complete_login`.
 - [x] Implement `get_portfolio`.
-- [ ] Implement `place_order`.
-- [ ] Add `HDFCConfig` to the configuration models.
-- [ ] Write `respx`-based integration tests for all adapter methods.
+- [x] Implement `place_order`.
+- [x] Add `HDFCConfig` to the configuration models.
+- [x] Write `respx`-based integration tests for all adapter methods.
 
 ## Dev Notes
 - **External API:** HDFC Securities API documentation is at `https://developer.hdfcsec.com/`.
@@ -35,6 +35,8 @@ Approved
 
 ## File List
 - src/ordo/adapters/hdfc.py
+- tests/adapters/test_hdfc.py
+- src/ordo/config.py
 
 ## Change Log
 | Date | Version | Description | Author |
