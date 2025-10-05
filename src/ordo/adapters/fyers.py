@@ -243,3 +243,25 @@ class FyersAdapter(IBrokerAdapter):
         )
 
         return portfolio.model_dump()
+
+    async def modify_order(self, session_data: Dict[str, Any], order_id: str, **kwargs) -> Any:
+        raise NotImplementedError
+
+    async def cancel_order(self, session_data: Dict[str, Any], order_id: str) -> Any:
+        raise NotImplementedError
+
+    async def get_order_book(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_trade_book(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_profile(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_holdings(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_positions(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
