@@ -707,10 +707,10 @@ class HDFCAdapter(IBrokerAdapter):
                     Order(
                         order_id=item.order_id,
                         symbol=item.tradingsymbol,
-                        status=OrderStatus(item.status.lower()),
-                        transaction_type=TransactionType(item.transaction_type.lower()),
+                        status=OrderStatus(item.status),
+                        transaction_type=TransactionType(item.transaction_type),
                         order_type=OrderType.MARKET,  # HDFC does not provide order type in order book
-                        product_type=ProductType(item.product.lower()),
+                        product_type=ProductType(item.product),
                         quantity=item.quantity,
                         price=item.price,
                         timestamp=datetime.fromisoformat(item.order_timestamp),
@@ -760,11 +760,11 @@ class HDFCAdapter(IBrokerAdapter):
                         trade_id=item.trade_id,
                         order_id=item.order_id,
                         exchange=item.exchange,
-                        product=ProductType(item.product.lower()),
+                        product=ProductType(item.product),
                         average_price=item.average_price,
                         filled_quantity=item.filled_quantity,
                         exchange_order_id=item.exchange_order_id,
-                        transaction_type=TransactionType(item.transaction_type.lower()),
+                        transaction_type=TransactionType(item.transaction_type),
                         fill_timestamp=datetime.strptime(
                             item.fill_timestamp, "%d/%m/%Y %H:%M:%S"
                         ),
@@ -918,7 +918,7 @@ class HDFCAdapter(IBrokerAdapter):
                         Position(
                             symbol=item.security_id,
                             quantity=item.net_qty,
-                            product_type=ProductType(item.product.lower()),
+                            product_type=ProductType(item.product),
                             exchange=item.exchange,
                             instrument_type=item.instrument_segment,
                             realised_pnl=item.realised_pl_overall_position,

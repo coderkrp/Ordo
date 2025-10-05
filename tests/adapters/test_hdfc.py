@@ -385,22 +385,28 @@ async def test_place_order_success(mock_session_manager, hdfc_credentials):
     Tests the success case for place_order.
     """
     adapter = HDFCAdapter()
-    place_order_url = f"{adapter.base_url}/order/place"
+    place_order_url = (
+        f"{adapter.base_url}/orders/regular?api_key={hdfc_credentials['api_key']}"
+    )
 
     mock_session_manager.get_session.return_value = "test_access_token"
 
     order_details = {
-        "orderType": "BUY",
         "exchange": "NSE",
-        "segment": "EQUITY",
-        "productType": "CNC",
-        "instrumentToken": "12345",
-        "quantity": 10,
-        "price": 100.0,
+        "security_id": "WIPLTDEQNR",
+        "instrument_segment": "EQUITY",
+        "transaction_type": "BUY",
+        "product": "DELIVERY",
+        "order_type": "LIMIT",
+        "quantity": 1,
+        "price": 458,
+        "validity": "DAY",
     }
 
     respx.post(place_order_url).mock(
-        return_value=Response(200, json={"orderId": "ORDER123", "status": "success"})
+        return_value=Response(
+            200, json={"data": {"order_id": "ORDER123"}, "status": "success"}
+        )
     )
 
     session_data = {
@@ -412,7 +418,7 @@ async def test_place_order_success(mock_session_manager, hdfc_credentials):
 
     result = await adapter.place_order(session_data, order_details)
 
-    assert result["orderId"] == "ORDER123"
+    assert result["order_id"] == "ORDER123"
     assert result["status"] == "success"
 
 
@@ -424,18 +430,22 @@ async def test_place_order_api_error(mock_session_manager, hdfc_credentials):
     Tests that place_order handles API errors.
     """
     adapter = HDFCAdapter()
-    place_order_url = f"{adapter.base_url}/order/place"
+    place_order_url = (
+        f"{adapter.base_url}/orders/regular?api_key={hdfc_credentials['api_key']}"
+    )
 
     mock_session_manager.get_session.return_value = "test_access_token"
 
     order_details = {
-        "orderType": "BUY",
         "exchange": "NSE",
-        "segment": "EQUITY",
-        "productType": "CNC",
-        "instrumentToken": "12345",
-        "quantity": 10,
-        "price": 100.0,
+        "security_id": "WIPLTDEQNR",
+        "instrument_segment": "EQUITY",
+        "transaction_type": "BUY",
+        "product": "DELIVERY",
+        "order_type": "LIMIT",
+        "quantity": 1,
+        "price": 458,
+        "validity": "DAY",
     }
 
     respx.post(place_order_url).mock(
@@ -467,12 +477,15 @@ async def test_place_order_invalid_details(mock_session_manager, hdfc_credential
     mock_session_manager.get_session.return_value = "test_access_token"
 
     order_details = {
-        "orderType": "BUY",
         "exchange": "NSE",
-        "segment": "EQUITY",
-        "productType": "CNC",
-        "instrumentToken": "12345",
+        "security_id": "WIPLTDEQNR",
+        "instrument_segment": "EQUITY",
+        "transaction_type": "BUY",
+        "product": "DELIVERY",
+        "order_type": "LIMIT",
         "quantity": "invalid_quantity",  # Invalid type
+        "price": 458,
+        "validity": "DAY",
     }
 
     session_data = {
@@ -564,8 +577,8 @@ async def test_get_order_book_success(mock_session_manager, hdfc_credentials):
                 "order_id": "ORDER123",
                 "tradingsymbol": "HDFC",
                 "status": "completed",
-                "transaction_type": "buy",
-                "product": "delivery",
+                "transaction_type": "BUY",
+                "product": "DELIVERY",
                 "quantity": 10,
                 "price": 1500.0,
                 "order_timestamp": "2025-10-04T12:00:00Z",
@@ -605,13 +618,30 @@ async def test_get_trade_book_success(mock_session_manager, hdfc_credentials):
     trade_book_response_data = {
         "data": [
             {
+                "client_id": "TESTCLIENT",
                 "trade_id": "TRADE123",
                 "order_id": "ORDER123",
-                "security_id": "HDFC",
-                "transaction_type": "buy",
-                "filled_quantity": 10,
+                "exchange": "NSE",
+                "product": "DELIVERY",
                 "average_price": 1500.0,
-                "fill_timestamp": "2025-10-04T12:00:00Z",
+                "filled_quantity": 10,
+                "pending_quantity": 0,
+                "exchange_order_id": "EXCH_ORDER123",
+                "transaction_type": "BUY",
+                "fill_timestamp": "04/10/2025 12:00:00",
+                "security_id": "HDFC",
+                "company_name": "HDFC Bank",
+                "underlying_symbol": "HDFCBANK",
+                "instrument_segment": "EQUITY",
+                "expiry_date": None,
+                "strike_price": None,
+                "option_type": None,
+                "isin": "INE040A01034",
+                "status": "completed",
+                "validity": "DAY",
+                "total_traded_value": 15000.0,
+                "order_source": "API",
+                "order_type": "LIMIT",
             }
         ]
     }
@@ -628,7 +658,6 @@ async def test_get_trade_book_success(mock_session_manager, hdfc_credentials):
 
     assert len(result) == 1
     assert result[0].trade_id == "TRADE123"
-    assert result[0].symbol == "HDFC"
 
 
 @pytest.mark.asyncio
@@ -728,7 +757,7 @@ async def test_get_positions_success(mock_session_manager, hdfc_credentials):
                 {
                     "security_id": "HDFC",
                     "net_qty": 5,
-                    "product": "delivery",
+                    "product": "DELIVERY",
                     "exchange": "NSE",
                     "instrument_segment": "EQUITY",
                     "realised_pl_overall_position": 500.0,
