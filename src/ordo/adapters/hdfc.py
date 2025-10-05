@@ -814,7 +814,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session."
+                )
+            )
 
         url = f"{self.base_url}/portfolio/overall_positions?api_key={config.api_key}"
         headers = {
@@ -826,18 +831,18 @@ class HDFCAdapter(IBrokerAdapter):
                 response.raise_for_status()
                 response_data = HDFCPositionsResponse(**response.json())
                 positions = []
-            for item in response_data.data.net:
-                positions.append(
-                    Position(
-                        symbol=item.security_id,
-                        quantity=item.net_qty,
-                        product_type=ProductType(item.product.lower()),
-                        exchange=item.exchange,
-                        instrument_type=item.instrument_segment,
-                        realised_pnl=item.realised_pl_overall_position,
+                for item in response_data.data.net:
+                    positions.append(
+                        Position(
+                            symbol=item.security_id,
+                            quantity=item.net_qty,
+                            product_type=ProductType(item.product.lower()),
+                            exchange=item.exchange,
+                            instrument_type=item.instrument_segment,
+                            realised_pnl=item.realised_pl_overall_position,
+                        )
                     )
-                )
-            return positions
+                return positions
         except httpx.HTTPStatusError as e:
             raise ApiException(
                 ApiError(
