@@ -349,13 +349,13 @@ async def test_get_portfolio_success(mock_session_manager):
 
     result = await adapter.get_portfolio(session_data)
 
-    assert result["total_pnl"] == 2.2
-    assert result["total_value"] == 3.75
-    assert result["funds"]["available_balance"] == 8000
-    assert result["funds"]["margin_used"] == 2000
-    assert result["funds"]["total_balance"] == 10000
-    assert len(result["holdings"]) == 1
-    assert result["holdings"][0]["symbol"] == "NSE:JPASSOCIAT-EQ"
+    assert result.total_pnl == 2.2
+    assert result.total_value == 3.75
+    assert result.funds.available_balance == 8000
+    assert result.funds.margin_used == 2000
+    assert result.funds.total_balance == 10000
+    assert len(result.holdings) == 1
+    assert result.holdings[0].symbol == "NSE:JPASSOCIAT-EQ"
 
 
 @pytest.mark.asyncio

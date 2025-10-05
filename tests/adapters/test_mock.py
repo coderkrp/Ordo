@@ -1,6 +1,7 @@
 import pytest
 from ordo.adapters.base import IBrokerAdapter
 from ordo.adapters.mock import MockAdapter
+from ordo.models.api.portfolio import Portfolio, Holding, Funds
 
 
 def test_ibroker_adapter_is_abstract():
@@ -31,13 +32,14 @@ async def test_mock_adapter_complete_login():
 @pytest.mark.asyncio
 async def test_mock_adapter_get_portfolio_structure():
     adapter = MockAdapter()
-    response = await adapter.get_portfolio({})
-    assert response["status"] == "success"
-    assert "portfolio" in response
-    portfolio = response["portfolio"]
-    assert "cash" in portfolio
-    assert "holdings" in portfolio
-    assert isinstance(portfolio["holdings"], list)
+    portfolio = await adapter.get_portfolio({})
+    assert isinstance(portfolio, Portfolio)
+    assert isinstance(portfolio.funds, Funds)
+    assert isinstance(portfolio.holdings, list)
+    assert all(isinstance(h, Holding) for h in portfolio.holdings)
+    assert portfolio.total_pnl is not None
+    assert portfolio.total_day_pnl is not None
+    assert portfolio.total_value is not None
 
 
 @pytest.mark.asyncio
@@ -45,25 +47,22 @@ async def test_mock_adapter_get_rich_portfolio_data():
     class RichMockAdapter(MockAdapter):
         async def get_portfolio(self, session_data):
             portfolio = await super().get_portfolio(session_data)
-            portfolio["portfolio"]["holdings"].append(
-                {
-                    "symbol": "NIFTY25SEP2423000CE",
-                    "exchange": "NFO",
-                    "quantity": 50,
-                    "average_price": 100.00,
-                    "last_price": 120.00,
-                    "pnl": 1000.00,
-                    "day_pnl": 200.00,
-                    "value": 6000.00,
-                    "instrument_type": "OPTIDX",
-                }
+            portfolio.holdings.append(
+                Holding(
+                    symbol="NIFTY25SEP2423000CE",
+                    quantity=50,
+                    ltp=120.00,
+                    avg_price=100.00,
+                    pnl=1000.00,
+                    day_pnl=200.00,
+                    value=6000.00,
+                )
             )
             return portfolio
 
     adapter = RichMockAdapter()
-    response = await adapter.get_portfolio({})
-    holdings = response["portfolio"]["holdings"]
-    assert any(h.get("instrument_type") == "OPTIDX" for h in holdings)
+    portfolio = await adapter.get_portfolio({})
+    assert any(h.symbol == "NIFTY25SEP2423000CE" for h in portfolio.holdings)
 
 
 @pytest.mark.asyncio
