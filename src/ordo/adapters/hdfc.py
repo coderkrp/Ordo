@@ -1,7 +1,9 @@
-from typing import Any, Dict, List
+import json
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, SecretStr, Field
 
 from ordo.adapters.base import IBrokerAdapter
 from ordo.models.api.errors import ApiError, ApiException
@@ -14,6 +16,11 @@ from ordo.models.api.order import (
     TransactionType,
     OrderType,
     ProductType,
+    OrderStatus,
+    ExchangeType,
+    InstrumentSegmentType,
+    ValidityType,
+    OptionType,
 )
 from ordo.models.api.user import Profile
 from ordo.security.session import SessionManager
@@ -55,13 +62,30 @@ class HDFCOrderBookResponse(BaseModel):
 
 
 class HDFCTradeBookItem(BaseModel):
+    client_id: str
     trade_id: str
     order_id: str
-    security_id: str
-    transaction_type: str
-    filled_quantity: int
+    exchange: str
+    product: str
     average_price: float
+    filled_quantity: int
+    pending_quantity: int
+    exchange_order_id: str
+    transaction_type: str
     fill_timestamp: str
+    security_id: str
+    company_name: str
+    underlying_symbol: str
+    instrument_segment: str
+    expiry_date: Optional[str]
+    strike_price: Optional[float]
+    option_type: Optional[str]
+    isin: str
+    status: str
+    validity: str
+    total_traded_value: float
+    order_source: str
+    order_type: str
 
 
 class HDFCTradeBookResponse(BaseModel):
@@ -98,45 +122,76 @@ class HDFCPositionsResponse(BaseModel):
 
 
 class HDFCPlaceOrderRequest(BaseModel):
-    orderType: str
-    exchange: str
-    segment: str
-    productType: str
-    instrumentToken: str
+    exchange: ExchangeType
+    security_id: str
+    instrument_segment: InstrumentSegmentType
+    transaction_type: TransactionType
+    product: ProductType
     quantity: int
-    price: float | None = None
-    triggerPrice: float | None = None
-    disclosedQuantity: int | None = None
-    validity: str = "DAY"
-    tag: str | None = None
-    orderSource: str = "API"
-    orderVariety: str = "REGULAR"
+    order_type: OrderType
+    price: Optional[float] = None
+    trigger_price: Optional[float] = None
+    disclosed_quantity: Optional[int] = None
+    validity: ValidityType
+    amo: Optional[bool] = None
+    external_reference_number: Optional[int] = None
+    expiry_date: Optional[str] = None
+    strike_price: Optional[float] = None
+    option_type: Optional[OptionType] = None
+    underlying_symbol: Optional[str] = None
 
 
 class HDFCLoginInitResponse(BaseModel):
-    tokenId: str
+    tokenId: str = Field(..., description="Unique token ID for login initiation.")
+
+
+class HDFCLoginValidateRequest(BaseModel):
+    tokenId: str = Field(..., description="Token ID obtained from login initiation.")
+    userId: str = Field(..., description="User ID for validation.")
+    password: SecretStr = Field(..., description="Password for validation.")
 
 
 class HDFCLoginValidateResponse(BaseModel):
-    recaptcha: bool
-    loginId: str
-    twofa: Dict[str, Any]
-    twoFAEnabled: bool
+    recaptcha: bool = Field(..., description="Indicates if reCAPTCHA is required.")
+    loginId: str = Field(..., description="Login ID for the user.")
+    twofa: Dict[str, Any] = Field(
+        ..., description="Details for two-factor authentication."
+    )
+    twoFAEnabled: bool = Field(
+        ..., description="Indicates if two-factor authentication is enabled."
+    )
+
+
+class HDFC2FARequest(BaseModel):
+    answer: str = Field(
+        ...,
+        description="Six-digit OTP for 2FA validation.",
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        json_schema_extra={"example": "123456"},
+    )
 
 
 class HDFC2FAResponse(BaseModel):
-    requestToken: str
-    termsAndConditions: Dict[str, Any]
-    authorised: bool
+    requestToken: str = Field(..., description="Request token after 2FA validation.")
+    termsAndConditions: Dict[str, Any] = Field(
+        ..., description="Terms and conditions details."
+    )
+    authorised: bool = Field(
+        ..., description="Indicates if the user has accepted the terms and conditions."
+    )
 
 
 class HDFCAuthoriseResponse(BaseModel):
-    callbackUrl: str
-    requestToken: str
+    callbackUrl: str = Field(..., description="Callback URL for authorization.")
+    requestToken: str = Field(..., description="Request token after authorization.")
 
 
 class HDFCAccessTokenResponse(BaseModel):
-    accessToken: str
+    accessToken: str = Field(
+        ..., description="Access token for authenticated API requests."
+    )
 
 
 class HDFCHoldingItem(BaseModel):
@@ -161,9 +216,13 @@ class HDFCPortfolioSummaryResponse(BaseModel):
     overallValue: float
 
 
-class HDFCPlaceOrderAPIResponse(BaseModel):
-    orderId: str
+class HDFCPlaceOrderResponseData(BaseModel):
+    order_id: str
+
+
+class HDFCPlaceOrderResponse(BaseModel):
     status: str
+    data: HDFCPlaceOrderResponseData
 
 
 class HDFCConfig(BaseModel):
@@ -188,6 +247,14 @@ class HDFCAdapter(IBrokerAdapter):
         self._headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         }
+
+    def _get_response_json_or_text(
+        self, response: httpx.Response
+    ) -> Union[Dict, str, None]:
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            return response.text
 
     def _create_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(headers=self._headers)
@@ -348,13 +415,14 @@ class HDFCAdapter(IBrokerAdapter):
                 return {"access_token": access_token}
 
             except httpx.HTTPStatusError as e:
+                response_content = self._get_response_json_or_text(e.response)
                 raise ApiException(
                     ApiError(
                         error_code="BROKER_API_ERROR",
                         message=f"HDFC API error during complete_login: {e.response.text}",
                         details={
                             "status_code": e.response.status_code,
-                            "response": e.response.json(),
+                            "response": response_content,
                         },
                     )
                 )
@@ -391,33 +459,34 @@ class HDFCAdapter(IBrokerAdapter):
         async with self._create_client() as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/order/place",
+                    f"{self.base_url}/orders/regular?api_key={config.api_key}",
                     headers=headers,
                     json=order_request.model_dump(exclude_none=True),
                 )
                 response.raise_for_status()
-                response_data = HDFCPlaceOrderAPIResponse(**response.json())
+                response_data = HDFCPlaceOrderResponse(**response.json())
 
-                order_id = response_data.orderId
+                order_id = response_data.data.order_id
                 status = response_data.status
 
                 if not order_id or not status:
                     raise ApiException(
                         ApiError(
-                            message="Failed to place order: Missing orderId or status in response."
+                            message="Failed to place order: Missing order_id or status in response."
                         )
                     )
 
-                return {"orderId": order_id, "status": status}
+                return {"order_id": order_id, "status": status}
 
             except httpx.HTTPStatusError as e:
+                response_content = self._get_response_json_or_text(e.response)
                 raise ApiException(
                     ApiError(
                         error_code="BROKER_API_ERROR",
                         message=f"HDFC API error during order placement: {e.response.text}",
                         details={
                             "status_code": e.response.status_code,
-                            "response": e.response.json(),
+                            "response": response_content,
                         },
                     )
                 )
@@ -471,13 +540,14 @@ class HDFCAdapter(IBrokerAdapter):
                 )
 
             except httpx.HTTPStatusError as e:
+                response_content = self._get_response_json_or_text(e.response)
                 raise ApiException(
                     ApiError(
                         error_code="BROKER_API_ERROR",
                         message=f"HDFC API error during portfolio retrieval: {e.response.text}",
                         details={
                             "status_code": e.response.status_code,
-                            "response": e.response.json(),
+                            "response": response_content,
                         },
                     )
                 )
@@ -557,13 +627,14 @@ class HDFCAdapter(IBrokerAdapter):
                 data = HDFCOrderActionResponse(**response.json())
                 return OrderResponse(order_id=data.data.order_id, status="success")
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during modify_order: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -595,13 +666,14 @@ class HDFCAdapter(IBrokerAdapter):
                 data = HDFCOrderActionResponse(**response.json())
                 return OrderResponse(order_id=data.data.order_id, status="cancelled")
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during cancel_order: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -635,24 +707,25 @@ class HDFCAdapter(IBrokerAdapter):
                     Order(
                         order_id=item.order_id,
                         symbol=item.tradingsymbol,
-                        status=item.status,
+                        status=OrderStatus(item.status.lower()),
                         transaction_type=TransactionType(item.transaction_type.lower()),
                         order_type=OrderType.MARKET,  # HDFC does not provide order type in order book
                         product_type=ProductType(item.product.lower()),
                         quantity=item.quantity,
                         price=item.price,
-                        timestamp=item.order_timestamp,
+                        timestamp=datetime.fromisoformat(item.order_timestamp),
                     )
                 )
             return orders
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during get_order_book: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -686,22 +759,29 @@ class HDFCAdapter(IBrokerAdapter):
                     Trade(
                         trade_id=item.trade_id,
                         order_id=item.order_id,
-                        symbol=item.security_id,
+                        exchange=item.exchange,
+                        product=ProductType(item.product.lower()),
+                        average_price=item.average_price,
+                        filled_quantity=item.filled_quantity,
+                        exchange_order_id=item.exchange_order_id,
                         transaction_type=TransactionType(item.transaction_type.lower()),
-                        quantity=item.filled_quantity,
-                        price=item.average_price,
-                        timestamp=item.fill_timestamp,
+                        fill_timestamp=datetime.strptime(
+                            item.fill_timestamp, "%d/%m/%Y %H:%M:%S"
+                        ),
+                        security_id=item.security_id,
+                        company_name=item.company_name,
                     )
                 )
             return trades
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during get_trade_book: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -733,13 +813,14 @@ class HDFCAdapter(IBrokerAdapter):
                     client_id=data.client_id, name=data.name, email=data.email
                 )
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during get_profile: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -791,13 +872,14 @@ class HDFCAdapter(IBrokerAdapter):
                     for h in holdings_data.holdings
                 ]
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during get_holdings: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )
@@ -844,13 +926,14 @@ class HDFCAdapter(IBrokerAdapter):
                     )
                 return positions
         except httpx.HTTPStatusError as e:
+            response_content = self._get_response_json_or_text(e.response)
             raise ApiException(
                 ApiError(
                     error_code="BROKER_API_ERROR",
                     message=f"HDFC API error during get_positions: {e.response.text}",
                     details={
                         "status_code": e.response.status_code,
-                        "response": e.response.json(),
+                        "response": response_content,
                     },
                 )
             )

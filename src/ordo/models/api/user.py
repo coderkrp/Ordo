@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, EmailStr
 
 
 class Profile(BaseModel):
-    client_id: str
-    name: str
-    email: str
+    client_id: str = Field(..., description="Unique identifier for the client.")
+    name: str = Field(..., description="Name of the client.")
+    email: EmailStr = Field(
+        ..., description="Email address of the client.", example="user@example.com"
+    )
