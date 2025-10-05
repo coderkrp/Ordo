@@ -151,7 +151,7 @@ class FyersAdapter(IBrokerAdapter):
             except (httpx.HTTPStatusError, httpx.RequestError):
                 return {"status": "inactive"}
 
-    async def get_portfolio(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_portfolio(self, session_data: Dict[str, Any]) -> Portfolio:
         """
         Retrieves the portfolio from Fyers.
         """
@@ -242,4 +242,27 @@ class FyersAdapter(IBrokerAdapter):
             total_value=holdings_data.get("overall", {}).get("total_current_value", 0),
         )
 
-        return portfolio.model_dump()
+        return portfolio
+
+    async def modify_order(
+        self, session_data: Dict[str, Any], order_id: str, **kwargs
+    ) -> Any:
+        raise NotImplementedError
+
+    async def cancel_order(self, session_data: Dict[str, Any], order_id: str) -> Any:
+        raise NotImplementedError
+
+    async def get_order_book(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_trade_book(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_profile(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_holdings(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    async def get_positions(self, session_data: Dict[str, Any]) -> Any:
+        raise NotImplementedError

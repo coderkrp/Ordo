@@ -1,0 +1,38 @@
+schema: 1
+story: '2.1'
+story_title: 'HDFC Securities Adapter'
+gate: PASS
+status_reason: 'Developer addressed all previous concerns. Code quality is high, and all acceptance criteria are met.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-10-04T12:00:00Z'
+
+top_issues: []
+waiver: {active: false}
+
+quality_score: 100
+expires: '2025-10-18T12:00:00Z'
+
+evidence:
+  tests_reviewed: 12
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Consent issue addressed.'
+  performance:
+    status: PASS
+    notes: 'No issues identified.'
+  reliability:
+    status: PASS
+    notes: 'Error handling is robust.'
+  maintainability:
+    status: PASS
+    notes: 'Code refactoring significantly improved maintainability.'
+
+recommendations:
+  immediate: []
+  future: []
