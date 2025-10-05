@@ -7,7 +7,7 @@ reviewer: 'Quinn (Test Architect)'
 updated: '2025-10-04T12:00:00Z'
 
 top_issues: []
-waiver: { active: false }
+waiver: {active: false}
 
 quality_score: 100
 expires: '2025-10-18T12:00:00Z'
