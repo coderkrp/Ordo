@@ -185,31 +185,34 @@ class HDFCAdapter(IBrokerAdapter):
     def __init__(self):
         self.base_url = "https://developer.hdfcsec.com/oapi/v1"
         self.session_manager = SessionManager(settings.SECRET_KEY)
-        self.http_client = httpx.AsyncClient(
-            headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-            }
-        )
+        self._headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        }
+
+    def _create_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(headers=self._headers)
 
     async def _get_login_token(self, config: HDFCConfig) -> str:
         """Fetches the initial login token."""
-        token_response = await self.http_client.get(
-            f"{self.base_url}/login?api_key={config.api_key}"
-        )
-        token_response.raise_for_status()
-        token_data = HDFCLoginInitResponse(**token_response.json())
-        return token_data.tokenId
+        async with self._create_client() as client:
+            token_response = await client.get(
+                f"{self.base_url}/login?api_key={config.api_key}"
+            )
+            token_response.raise_for_status()
+            token_data = HDFCLoginInitResponse(**token_response.json())
+            return token_data.tokenId
 
     async def _validate_user(
         self, config: HDFCConfig, token_id: str
     ) -> HDFCLoginValidateResponse:
         """Validates username and password."""
-        validate_response = await self.http_client.post(
-            f"{self.base_url}/login/validate?api_key={config.api_key}&token_id={token_id}",
-            json={"username": config.username, "password": config.password},
-        )
-        validate_response.raise_for_status()
-        return HDFCLoginValidateResponse(**validate_response.json())
+        async with self._create_client() as client:
+            validate_response = await client.post(
+                f"{self.base_url}/login/validate?api_key={config.api_key}&token_id={token_id}",
+                json={"username": config.username, "password": config.password},
+            )
+            validate_response.raise_for_status()
+            return HDFCLoginValidateResponse(**validate_response.json())
 
     async def initiate_login(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -385,7 +388,7 @@ class HDFCAdapter(IBrokerAdapter):
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient() as client:
+        async with self._create_client() as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/order/place",
@@ -441,7 +444,7 @@ class HDFCAdapter(IBrokerAdapter):
 
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        async with httpx.AsyncClient() as client:
+        async with self._create_client() as client:
             try:
                 # Retrieve Holdings
                 holdings_response = await client.get(
@@ -546,12 +549,13 @@ class HDFCAdapter(IBrokerAdapter):
             "Content-Type": "application/json",
         }
         try:
-            response = await self.http_client.put(
-                url, json=payload.model_dump(), headers=headers
-            )
-            response.raise_for_status()
-            data = HDFCOrderActionResponse(**response.json())
-            return OrderResponse(order_id=data.data.order_id, status="success")
+            async with self._create_client() as client:
+                response = await client.put(
+                    url, json=payload.model_dump(), headers=headers
+                )
+                response.raise_for_status()
+                data = HDFCOrderActionResponse(**response.json())
+                return OrderResponse(order_id=data.data.order_id, status="success")
         except httpx.HTTPStatusError as e:
             raise ApiException(
                 ApiError(
@@ -585,10 +589,11 @@ class HDFCAdapter(IBrokerAdapter):
             "Authorization": f"Bearer {access_token}",
         }
         try:
-            response = await self.http_client.delete(url, headers=headers)
-            response.raise_for_status()
-            data = HDFCOrderActionResponse(**response.json())
-            return OrderResponse(order_id=data.data.order_id, status="cancelled")
+            async with self._create_client() as client:
+                response = await client.delete(url, headers=headers)
+                response.raise_for_status()
+                data = HDFCOrderActionResponse(**response.json())
+                return OrderResponse(order_id=data.data.order_id, status="cancelled")
         except httpx.HTTPStatusError as e:
             raise ApiException(
                 ApiError(
@@ -620,10 +625,11 @@ class HDFCAdapter(IBrokerAdapter):
             "Authorization": f"Bearer {access_token}",
         }
         try:
-            response = await self.http_client.get(url, headers=headers)
-            response.raise_for_status()
-            data = HDFCOrderBookResponse(**response.json())
-            orders = []
+            async with self._create_client() as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = HDFCOrderBookResponse(**response.json())
+                orders = []
             for item in data.data:
                 orders.append(
                     Order(
@@ -670,10 +676,11 @@ class HDFCAdapter(IBrokerAdapter):
             "Authorization": f"Bearer {access_token}",
         }
         try:
-            response = await self.http_client.get(url, headers=headers)
-            response.raise_for_status()
-            data = HDFCTradeBookResponse(**response.json())
-            trades = []
+            async with self._create_client() as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = HDFCTradeBookResponse(**response.json())
+                trades = []
             for item in data.data:
                 trades.append(
                     Trade(
@@ -718,10 +725,13 @@ class HDFCAdapter(IBrokerAdapter):
             "Authorization": f"Bearer {access_token}",
         }
         try:
-            response = await self.http_client.get(url, headers=headers)
-            response.raise_for_status()
-            data = HDFCProfileResponse(**response.json())
-            return Profile(client_id=data.client_id, name=data.name, email=data.email)
+            async with self._create_client() as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = HDFCProfileResponse(**response.json())
+                return Profile(
+                    client_id=data.client_id, name=data.name, email=data.email
+                )
         except httpx.HTTPStatusError as e:
             raise ApiException(
                 ApiError(
@@ -756,27 +766,30 @@ class HDFCAdapter(IBrokerAdapter):
         headers = {"Authorization": f"Bearer {access_token}"}
 
         try:
-            # Retrieve Holdings
-            holdings_response = await self.http_client.get(
-                f"{self.base_url}/holdings",
-                headers=headers,
-                params={"clientId": login_id},  # Assuming clientId is a query parameter
-            )
-            holdings_response.raise_for_status()
-            holdings_data = HDFCHoldingsResponse(**holdings_response.json())
-
-            return [
-                Holding(
-                    symbol=h.symbol,
-                    quantity=h.quantity,
-                    ltp=h.currentPrice,
-                    avg_price=h.averagePrice,
-                    pnl=h.profitLoss,
-                    day_pnl=0.0,  # HDFC API does not provide day P&L in the holdings endpoint.
-                    value=h.totalValue,
+            async with self._create_client() as client:
+                # Retrieve Holdings
+                holdings_response = await client.get(
+                    f"{self.base_url}/holdings",
+                    headers=headers,
+                    params={
+                        "clientId": login_id
+                    },  # Assuming clientId is a query parameter
                 )
-                for h in holdings_data.holdings
-            ]
+                holdings_response.raise_for_status()
+                holdings_data = HDFCHoldingsResponse(**holdings_response.json())
+
+                return [
+                    Holding(
+                        symbol=h.symbol,
+                        quantity=h.quantity,
+                        ltp=h.currentPrice,
+                        avg_price=h.averagePrice,
+                        pnl=h.profitLoss,
+                        day_pnl=0.0,  # HDFC API does not provide day P&L in the holdings endpoint.
+                        value=h.totalValue,
+                    )
+                    for h in holdings_data.holdings
+                ]
         except httpx.HTTPStatusError as e:
             raise ApiException(
                 ApiError(
@@ -808,10 +821,11 @@ class HDFCAdapter(IBrokerAdapter):
             "Authorization": f"Bearer {access_token}",
         }
         try:
-            response = await self.http_client.get(url, headers=headers)
-            response.raise_for_status()
-            response_data = HDFCPositionsResponse(**response.json())
-            positions = []
+            async with self._create_client() as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                response_data = HDFCPositionsResponse(**response.json())
+                positions = []
             for item in response_data.data.net:
                 positions.append(
                     Position(
