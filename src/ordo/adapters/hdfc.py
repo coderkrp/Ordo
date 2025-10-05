@@ -817,7 +817,7 @@ class HDFCAdapter(IBrokerAdapter):
             raise ApiException(
                 ApiError(
                     error_code="UNAUTHORIZED",
-                    message="No access token found in session."
+                    message="No access token found in session.",
                 )
             )
 
