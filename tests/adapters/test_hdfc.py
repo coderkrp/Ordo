@@ -151,7 +151,15 @@ async def test_complete_login_success_no_2fa(mock_session_manager, hdfc_credenti
     # Mock Step 4: Authorize (assuming request_token is obtained from previous step or not needed)
     respx.get(
         f"{adapter.base_url}/authorise?api_key={hdfc_credentials['api_key']}&token_id=test_token_id&consent=true&request_token=None"
-    ).mock(return_value=Response(200, json={"callbackUrl": "https://example.com", "requestToken": "test_request_token"}))
+    ).mock(
+        return_value=Response(
+            200,
+            json={
+                "callbackUrl": "https://example.com",
+                "requestToken": "test_request_token",
+            },
+        )
+    )
 
     # Mock Step 5: Get accessToken
     respx.post(
@@ -185,12 +193,29 @@ async def test_complete_login_success_with_2fa(mock_session_manager, hdfc_creden
     # Mock Step 3: Validate 2FA OTP
     respx.post(
         f"{adapter.base_url}/twofa/validate?api_key={hdfc_credentials['api_key']}&token_id=test_token_id"
-    ).mock(return_value=Response(200, json={"requestToken": "2fa_request_token", "termsAndConditions": {}, "authorised": True}))
+    ).mock(
+        return_value=Response(
+            200,
+            json={
+                "requestToken": "2fa_request_token",
+                "termsAndConditions": {},
+                "authorised": True,
+            },
+        )
+    )
 
     # Mock Step 4: Authorize
     respx.get(
         f"{adapter.base_url}/authorise?api_key={hdfc_credentials['api_key']}&token_id=test_token_id&consent=true&request_token=2fa_request_token"
-    ).mock(return_value=Response(200, json={"callbackUrl": "https://example.com", "requestToken": "final_request_token"}))
+    ).mock(
+        return_value=Response(
+            200,
+            json={
+                "callbackUrl": "https://example.com",
+                "requestToken": "final_request_token",
+            },
+        )
+    )
 
     # Mock Step 5: Get accessToken
     respx.post(
@@ -292,8 +317,12 @@ async def test_get_portfolio_success(mock_session_manager, hdfc_credentials):
         "overallValue": 16000.0,
     }
 
-    respx.get(holdings_url).mock(return_value=Response(200, json=holdings_response_data))
-    respx.get(portfolio_url).mock(return_value=Response(200, json=portfolio_summary_response_data))
+    respx.get(holdings_url).mock(
+        return_value=Response(200, json=holdings_response_data)
+    )
+    respx.get(portfolio_url).mock(
+        return_value=Response(200, json=portfolio_summary_response_data)
+    )
 
     session_data = {
         "credentials": hdfc_credentials,
@@ -304,18 +333,18 @@ async def test_get_portfolio_success(mock_session_manager, hdfc_credentials):
 
     result = await adapter.get_portfolio(session_data)
 
-    assert result["total_pnl"] == 1000.0
-    assert result["total_value"] == 16000.0
-    assert result["funds"]["available_balance"] == 50000.0
-    assert result["funds"]["margin_used"] == 10000.0
-    assert result["funds"]["total_balance"] == 60000.0
-    assert len(result["holdings"]) == 1
-    assert result["holdings"][0]["symbol"] == "HDFC"
-    assert result["holdings"][0]["quantity"] == 10
-    assert result["holdings"][0]["ltp"] == 1600.0
-    assert result["holdings"][0]["avg_price"] == 1500.0
-    assert result["holdings"][0]["pnl"] == 1000.0
-    assert result["holdings"][0]["value"] == 16000.0
+    assert result.total_pnl == 1000.0
+    assert result.total_value == 16000.0
+    assert result.funds.available_balance == 50000.0
+    assert result.funds.margin_used == 10000.0
+    assert result.funds.total_balance == 60000.0
+    assert len(result.holdings) == 1
+    assert result.holdings[0].symbol == "HDFC"
+    assert result.holdings[0].quantity == 10
+    assert result.holdings[0].ltp == 1600.0
+    assert result.holdings[0].avg_price == 1500.0
+    assert result.holdings[0].pnl == 1000.0
+    assert result.holdings[0].value == 16000.0
 
 
 @pytest.mark.asyncio
@@ -330,7 +359,9 @@ async def test_get_portfolio_api_error(mock_session_manager, hdfc_credentials):
 
     mock_session_manager.get_session.return_value = "test_access_token"
 
-    respx.get(holdings_url).mock(return_value=Response(400, json={"message": "Invalid request"}))
+    respx.get(holdings_url).mock(
+        return_value=Response(400, json={"message": "Invalid request"})
+    )
 
     session_data = {
         "credentials": hdfc_credentials,
@@ -441,7 +472,7 @@ async def test_place_order_invalid_details(mock_session_manager, hdfc_credential
         "segment": "EQUITY",
         "productType": "CNC",
         "instrumentToken": "12345",
-        "quantity": "invalid_quantity", # Invalid type
+        "quantity": "invalid_quantity",  # Invalid type
     }
 
     session_data = {
@@ -455,3 +486,267 @@ async def test_place_order_invalid_details(mock_session_manager, hdfc_credential
         await adapter.place_order(session_data, order_details)
 
     assert "Invalid order details" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_modify_order_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for modify_order.
+    """
+    adapter = HDFCAdapter()
+    modify_order_url = f"{adapter.base_url}/orders/regular/ORDER123?api_key={hdfc_credentials['api_key']}"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    order_details = {
+        "new_quantity": 20,
+    }
+
+    respx.put(modify_order_url).mock(
+        return_value=Response(200, json={"data": {"order_id": "ORDER123"}})
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.modify_order(session_data, "ORDER123", **order_details)
+
+    assert result.order_id == "ORDER123"
+    assert result.status == "success"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_cancel_order_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for cancel_order.
+    """
+    adapter = HDFCAdapter()
+    cancel_order_url = f"{adapter.base_url}/orders/regular/ORDER123?api_key={hdfc_credentials['api_key']}"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    respx.delete(cancel_order_url).mock(
+        return_value=Response(200, json={"data": {"order_id": "ORDER123"}})
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.cancel_order(session_data, "ORDER123")
+
+    assert result.order_id == "ORDER123"
+    assert result.status == "cancelled"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_order_book_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_order_book.
+    """
+    adapter = HDFCAdapter()
+    get_order_book_url = (
+        f"{adapter.base_url}/orders?api_key={hdfc_credentials['api_key']}"
+    )
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    order_book_response_data = {
+        "data": [
+            {
+                "order_id": "ORDER123",
+                "tradingsymbol": "HDFC",
+                "status": "completed",
+                "transaction_type": "buy",
+                "product": "delivery",
+                "quantity": 10,
+                "price": 1500.0,
+                "order_timestamp": "2025-10-04T12:00:00Z",
+            }
+        ]
+    }
+
+    respx.get(get_order_book_url).mock(
+        return_value=Response(200, json=order_book_response_data)
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.get_order_book(session_data)
+
+    assert len(result) == 1
+    assert result[0].order_id == "ORDER123"
+    assert result[0].symbol == "HDFC"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_trade_book_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_trade_book.
+    """
+    adapter = HDFCAdapter()
+    get_trade_book_url = (
+        f"{adapter.base_url}/trades?api_key={hdfc_credentials['api_key']}"
+    )
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    trade_book_response_data = {
+        "data": [
+            {
+                "trade_id": "TRADE123",
+                "order_id": "ORDER123",
+                "security_id": "HDFC",
+                "transaction_type": "buy",
+                "filled_quantity": 10,
+                "average_price": 1500.0,
+                "fill_timestamp": "2025-10-04T12:00:00Z",
+            }
+        ]
+    }
+
+    respx.get(get_trade_book_url).mock(
+        return_value=Response(200, json=trade_book_response_data)
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.get_trade_book(session_data)
+
+    assert len(result) == 1
+    assert result[0].trade_id == "TRADE123"
+    assert result[0].symbol == "HDFC"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_profile_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_profile.
+    """
+    adapter = HDFCAdapter()
+    get_profile_url = f"{adapter.base_url}/profile"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    profile_response_data = {
+        "client_id": "TESTCLIENT",
+        "name": "Test Client",
+        "email": "test@example.com",
+    }
+
+    respx.get(get_profile_url).mock(
+        return_value=Response(200, json=profile_response_data)
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.get_profile(session_data)
+
+    assert result.client_id == "TESTCLIENT"
+    assert result.name == "Test Client"
+    assert result.email == "test@example.com"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_holdings_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_holdings.
+    """
+    adapter = HDFCAdapter()
+    get_holdings_url = f"{adapter.base_url}/holdings"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    holdings_response_data = {
+        "holdings": [
+            {
+                "isin": "INE000A01025",
+                "symbol": "HDFC",
+                "quantity": 10,
+                "averagePrice": 1500.0,
+                "currentPrice": 1600.0,
+                "totalValue": 16000.0,
+                "profitLoss": 1000.0,
+            }
+        ]
+    }
+
+    respx.get(get_holdings_url).mock(
+        return_value=Response(200, json=holdings_response_data)
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+        "loginId": "test_login_id",
+    }
+
+    result = await adapter.get_holdings(session_data)
+
+    assert len(result) == 1
+    assert result[0].symbol == "HDFC"
+    assert result[0].quantity == 10
+    assert result[0].ltp == 1600.0
+    assert result[0].avg_price == 1500.0
+    assert result[0].pnl == 1000.0
+    assert result[0].value == 16000.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@respx.mock
+async def test_get_positions_success(mock_session_manager, hdfc_credentials):
+    """
+    Tests the success case for get_positions.
+    """
+    adapter = HDFCAdapter()
+    get_positions_url = f"{adapter.base_url}/portfolio/overall_positions?api_key={hdfc_credentials['api_key']}"
+
+    mock_session_manager.get_session.return_value = "test_access_token"
+
+    positions_response_data = {
+        "data": {
+            "net": [
+                {
+                    "security_id": "HDFC",
+                    "net_qty": 5,
+                    "product": "delivery",
+                    "exchange": "NSE",
+                    "instrument_segment": "EQUITY",
+                    "realised_pl_overall_position": 500.0,
+                }
+            ]
+        }
+    }
+
+    respx.get(get_positions_url).mock(
+        return_value=Response(200, json=positions_response_data)
+    )
+
+    session_data = {
+        "credentials": hdfc_credentials,
+    }
+
+    result = await adapter.get_positions(session_data)
+
+    assert len(result) == 1
+    assert result[0].symbol == "HDFC"
+    assert result[0].quantity == 5
