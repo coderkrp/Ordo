@@ -336,7 +336,10 @@ class HDFCAdapter(IBrokerAdapter):
         twofa_data = HDFC2FAResponse(**twofa_response.json())
         if not twofa_data.requestToken:
             raise ApiException(
-                ApiError(message="Failed to get requestToken after 2FA validation")
+                ApiError(
+                    error_code="TOKEN_GENERATION_FAILED",
+                    message="Failed to get requestToken after 2FA validation",
+                )
             )
         return twofa_data.requestToken
 
@@ -357,7 +360,10 @@ class HDFCAdapter(IBrokerAdapter):
         authorise_data = HDFCAuthoriseResponse(**authorise_response.json())
         if not authorise_data.requestToken:
             raise ApiException(
-                ApiError(message="Failed to get requestToken after authorization")
+                ApiError(
+                    error_code="TOKEN_GENERATION_FAILED",
+                    message="Failed to get requestToken after authorization",
+                )
             )
         return authorise_data.requestToken
 
@@ -373,7 +379,10 @@ class HDFCAdapter(IBrokerAdapter):
         access_token_data = HDFCAccessTokenResponse(**access_token_response.json())
         if not access_token_data.accessToken:
             raise ApiException(
-                ApiError(message="Failed to get accessToken from HDFC API")
+                ApiError(
+                    error_code="TOKEN_GENERATION_FAILED",
+                    message="Failed to get accessToken from HDFC API",
+                )
             )
         return access_token_data.accessToken
 
@@ -444,7 +453,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         try:
             order_request = HDFCPlaceOrderRequest(**order_details)
@@ -472,7 +486,8 @@ class HDFCAdapter(IBrokerAdapter):
                 if not order_id or not status:
                     raise ApiException(
                         ApiError(
-                            message="Failed to place order: Missing order_id or status in response."
+                            error_code="INVALID_ORDER_RESPONSE",
+                            message="Failed to place order: Missing order_id or status in response.",
                         )
                     )
 
@@ -507,9 +522,18 @@ class HDFCAdapter(IBrokerAdapter):
         login_id = session_data.get("loginId")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
         if not login_id:
-            raise ApiException(ApiError(message="No login ID found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="SESSION_ERROR", message="No login ID found in session."
+                )
+            )
 
         headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -601,7 +625,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         url = f"{self.base_url}/orders/regular/{order_id}?api_key={config.api_key}"
         payload = HDFCModifyOrderRequest(
@@ -653,7 +682,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         url = f"{self.base_url}/orders/regular/{order_id}?api_key={config.api_key}"
         headers = {
@@ -690,7 +724,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         url = f"{self.base_url}/orders?api_key={config.api_key}"
         headers = {
@@ -703,6 +742,10 @@ class HDFCAdapter(IBrokerAdapter):
                 data = HDFCOrderBookResponse(**response.json())
                 orders = []
             for item in data.data:
+                timestamp_str = item.order_timestamp
+                if timestamp_str and timestamp_str.endswith("Z"):
+                    timestamp_str = timestamp_str.replace("Z", "+00:00")
+
                 orders.append(
                     Order(
                         order_id=item.order_id,
@@ -713,7 +756,11 @@ class HDFCAdapter(IBrokerAdapter):
                         product_type=ProductType(item.product),
                         quantity=item.quantity,
                         price=item.price,
-                        timestamp=datetime.fromisoformat(item.order_timestamp),
+                        timestamp=(
+                            datetime.fromisoformat(timestamp_str)
+                            if timestamp_str
+                            else None
+                        ),
                     )
                 )
             return orders
@@ -742,7 +789,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         url = f"{self.base_url}/trades?api_key={config.api_key}"
         headers = {
@@ -798,7 +850,12 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         url = f"{self.base_url}/profile"
         headers = {
@@ -837,12 +894,21 @@ class HDFCAdapter(IBrokerAdapter):
         access_token = self.session_manager.get_session(config.api_key, "access_token")
 
         if not access_token:
-            raise ApiException(ApiError(message="No access token found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="UNAUTHORIZED",
+                    message="No access token found in session.",
+                )
+            )
 
         login_id = session_data.get("loginId")
 
         if not login_id:
-            raise ApiException(ApiError(message="No login ID found in session."))
+            raise ApiException(
+                ApiError(
+                    error_code="SESSION_ERROR", message="No login ID found in session."
+                )
+            )
 
         headers = {"Authorization": f"Bearer {access_token}"}
 
