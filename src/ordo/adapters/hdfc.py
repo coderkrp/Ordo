@@ -546,7 +546,9 @@ class HDFCAdapter(IBrokerAdapter):
             "Content-Type": "application/json",
         }
         try:
-            response = await self.http_client.put(url, json=payload.model_dump(), headers=headers)
+            response = await self.http_client.put(
+                url, json=payload.model_dump(), headers=headers
+            )
             response.raise_for_status()
             data = HDFCOrderActionResponse(**response.json())
             return OrderResponse(order_id=data.data.order_id, status="success")
@@ -758,9 +760,7 @@ class HDFCAdapter(IBrokerAdapter):
             holdings_response = await self.http_client.get(
                 f"{self.base_url}/holdings",
                 headers=headers,
-                params={
-                    "clientId": login_id
-                },  # Assuming clientId is a query parameter
+                params={"clientId": login_id},  # Assuming clientId is a query parameter
             )
             holdings_response.raise_for_status()
             holdings_data = HDFCHoldingsResponse(**holdings_response.json())

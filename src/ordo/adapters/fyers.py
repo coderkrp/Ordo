@@ -244,7 +244,9 @@ class FyersAdapter(IBrokerAdapter):
 
         return portfolio.model_dump()
 
-    async def modify_order(self, session_data: Dict[str, Any], order_id: str, **kwargs) -> Any:
+    async def modify_order(
+        self, session_data: Dict[str, Any], order_id: str, **kwargs
+    ) -> Any:
         raise NotImplementedError
 
     async def cancel_order(self, session_data: Dict[str, Any], order_id: str) -> Any:
@@ -264,4 +266,3 @@ class FyersAdapter(IBrokerAdapter):
 
     async def get_positions(self, session_data: Dict[str, Any]) -> Any:
         raise NotImplementedError
-
