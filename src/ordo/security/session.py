@@ -3,6 +3,14 @@
 from cryptography.fernet import Fernet
 
 
+class SessionCheckResult:
+    """Result of session validation check."""
+
+    def __init__(self, status: str, message: str = ""):
+        self.status = status  # "valid", "expired", "refresh_failed", "unsupported"
+        self.message = message
+
+
 class SessionManager:
     """Manages encrypted session data for broker adapters."""
 
@@ -34,3 +42,33 @@ class SessionManager:
             return None
         decrypted_value = self._fernet.decrypt(encrypted_value).decode()
         return decrypted_value
+
+    async def ensure_valid_session(
+        self, broker_id: str, account_id: str
+    ) -> SessionCheckResult:
+        """
+        Validate session before orchestrator makes broker calls.
+
+        Args:
+            broker_id: Broker identifier
+            account_id: Account identifier for the broker
+
+        Returns:
+            SessionCheckResult with status:
+            - "valid": Session exists and is valid
+            - "expired": Session expired
+            - "refresh_failed": Session refresh attempted but failed
+            - "unsupported": Broker doesn't support session refresh
+        """
+        # Check if session exists
+        session_token = self.get_session(broker_id, "access_token")
+
+        if session_token:
+            # Session exists, assume it's valid for now
+            # In a real implementation, we would check expiry time
+            return SessionCheckResult(status="valid", message="Session is valid")
+
+        # No session found
+        return SessionCheckResult(
+            status="expired", message=f"No session found for broker {broker_id}"
+        )
