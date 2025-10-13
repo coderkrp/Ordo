@@ -25,18 +25,22 @@ async def initiate_login_api(
 
 
 async def complete_login_api(
-    broker: str, session_data: Dict[str, Any], auth_code: str, response_state: str
+    broker: str, session_data: Dict[str, Any], auth_code: Optional[str] = None, response_state: Optional[str] = None
 ) -> Dict[str, Any]:
     """Completes login with the Ordo API."""
     async with httpx.AsyncClient() as client:
+        request_body = {
+            "broker": broker,
+            "session_data": session_data,
+        }
+        if auth_code is not None:
+            request_body["auth_code"] = auth_code
+        if response_state is not None:
+            request_body["response_state"] = response_state
+        
         response = await client.post(
             f"{ORDO_API_BASE_URL}/login/complete",
-            json={
-                "broker": broker,
-                "session_data": session_data,
-                "auth_code": auth_code,
-                "response_state": response_state,
-            },
+            json=request_body,
         )
         response.raise_for_status()
         return response.json()
@@ -65,6 +69,10 @@ def login(
     app_id: Optional[str] = typer.Option(None, help="Fyers API App ID"),
     secret_id: Optional[str] = typer.Option(None, help="Fyers API Secret ID"),
     redirect_uri: Optional[str] = typer.Option(None, help="Fyers API Redirect URI"),
+    api_key: Optional[str] = typer.Option(None, help="HDFC API Key"),
+    username: Optional[str] = typer.Option(None, help="HDFC Username"),
+    password: Optional[str] = typer.Option(None, help="HDFC Password"),
+    api_secret: Optional[str] = typer.Option(None, help="HDFC API Secret"),
 ):
     """
     Initiates the login process for a specified broker and handles OTP entry.
@@ -73,56 +81,116 @@ def login(
     async def run_login():
         typer.echo(f"Initiating login for broker: {broker}")
 
-        # Prioritize CLI arguments, then .env settings
-        fyers_app_id = app_id or settings.FYERS_APP_ID
-        fyers_secret_id = secret_id or settings.FYERS_SECRET_ID
-        fyers_redirect_uri = redirect_uri or settings.FYERS_REDIRECT_URI
-
+        # Build credentials based on broker type
         credentials = {}
+        
         if broker == "fyers":
+            # Prioritize CLI arguments, then .env settings
+            fyers_app_id = app_id or settings.FYERS_APP_ID
+            fyers_secret_id = secret_id or settings.FYERS_SECRET_ID
+            fyers_redirect_uri = redirect_uri or settings.FYERS_REDIRECT_URI
+            
+            # Validate all three required
+            missing_fields = []
             if not fyers_app_id:
-                typer.echo(
-                    "Error: Fyers App ID is required. Provide via --app-id or FYERS_APP_ID in .env"
-                )
-                raise typer.Exit(code=1)
+                missing_fields.append("app_id")
             if not fyers_secret_id:
-                typer.echo(
-                    "Error: Fyers Secret ID is required. Provide via --secret-id or FYERS_SECRET_ID in .env"
-                )
-                raise typer.Exit(code=1)
+                missing_fields.append("secret_id")
             if not fyers_redirect_uri:
+                missing_fields.append("redirect_uri")
+            
+            if missing_fields:
                 typer.echo(
-                    "Error: Fyers Redirect URI is required. Provide via --redirect-uri or FYERS_REDIRECT_URI in .env"
+                    f"Missing required Fyers credentials: {', '.join(missing_fields)}. Provide via CLI options or .env file."
                 )
                 raise typer.Exit(code=1)
-
-            credentials["app_id"] = fyers_app_id
-            credentials["secret_id"] = fyers_secret_id
-            credentials["redirect_uri"] = fyers_redirect_uri
+            
+            credentials = {
+                "app_id": fyers_app_id,
+                "secret_id": fyers_secret_id,
+                "redirect_uri": fyers_redirect_uri
+            }
+        
+        elif broker == "hdfc":
+            # Prioritize CLI arguments, then .env settings
+            hdfc_api_key = api_key or settings.HDFC_API_KEY
+            hdfc_username = username or settings.HDFC_USERNAME
+            hdfc_password = password or settings.HDFC_PASSWORD
+            hdfc_api_secret = api_secret or settings.HDFC_API_SECRET
+            
+            # Validate all four required
+            missing_fields = []
+            if not hdfc_api_key:
+                missing_fields.append("api_key")
+            if not hdfc_username:
+                missing_fields.append("username")
+            if not hdfc_password:
+                missing_fields.append("password")
+            if not hdfc_api_secret:
+                missing_fields.append("api_secret")
+            
+            if missing_fields:
+                typer.echo(
+                    f"Missing required HDFC credentials: {', '.join(missing_fields)}. Provide via CLI options or .env file."
+                )
+                raise typer.Exit(code=1)
+            
+            credentials = {
+                "api_key": hdfc_api_key,
+                "username": hdfc_username,
+                "password": hdfc_password,
+                "apiSecret": hdfc_api_secret
+            }
+        
+        elif broker == "mock":
+            # No credentials needed for mock broker
+            credentials = {}
+        
+        else:
+            # Unknown broker - warn but let server validate
+            typer.echo(f"Warning: broker '{broker}' not recognized locally; letting server validate.")
+            credentials = {}
 
         try:
             # Step 1: Initiate login
             initiate_response = await initiate_login_api(broker, credentials)
-            login_url = initiate_response.get("login_url", "N/A")
             session_data = initiate_response.get("session_data", {})
 
-            typer.echo(f"Login initiated. Please visit: {login_url}")
-
-            # Step 2: Prompt for the full redirect URL
-            typer.echo(
-                "After logging in with Fyers, you will be redirected to a URL. Please paste the full URL here."
-            )
-            redirect_url_from_user = typer.prompt("Enter the full redirect URL")
-
-            # Step 3: Parse the URL to get auth_code and state
-            parsed_data = await parse_redirect_url(redirect_url_from_user)
-            auth_code = parsed_data["auth_code"]
-            response_state = parsed_data["response_state"]
-
-            # Step 4: Complete login
-            complete_response = await complete_login_api(
-                broker, session_data, auth_code, response_state
-            )
+            # Step 2: Broker-specific interaction patterns
+            if broker == "fyers":
+                login_url = initiate_response.get("login_url", "N/A")
+                typer.echo(f"Login initiated. Please visit: {login_url}")
+                typer.echo("After logging in with Fyers, you will be redirected to a URL. Please paste the full URL here.")
+                redirect_url_from_user = typer.prompt("Enter the full redirect URL")
+                
+                # Parse the URL to get auth_code and state
+                parsed_data = await parse_redirect_url(redirect_url_from_user)
+                auth_code = parsed_data["auth_code"]
+                response_state = parsed_data["response_state"]
+                
+                # Complete login with OAuth parameters
+                complete_response = await complete_login_api(
+                    broker, session_data, auth_code, response_state
+                )
+            
+            elif broker == "hdfc":
+                typer.echo("Credentials validated. Please enter OTP sent to your registered device.")
+                otp = typer.prompt("Enter OTP")
+                session_data["otp"] = otp
+                
+                # Complete login with OTP in session_data
+                complete_response = await complete_login_api(
+                    broker, session_data, None, None
+                )
+            
+            elif broker == "mock":
+                typer.echo("Mock authentication - no OTP required.")
+                
+                # Complete login immediately with no additional data
+                complete_response = await complete_login_api(
+                    broker, session_data, None, None
+                )
+            
             access_token = complete_response.get("access_token")
 
             typer.echo(f"Login complete: {complete_response.get('message', 'Success')}")
