@@ -147,8 +147,9 @@ def login(
             credentials = {}
         
         else:
-            typer.echo(f"Unsupported broker: {broker}. Supported brokers: fyers, hdfc, mock")
-            raise typer.Exit(code=1)
+            # Unknown broker - warn but let server validate
+            typer.echo(f"Warning: broker '{broker}' not recognized locally; letting server validate.")
+            credentials = {}
 
         try:
             # Step 1: Initiate login
