@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, status, Body
+from fastapi import FastAPI, APIRouter, HTTPException, status, Body, Depends, Query
+from typing import List, Dict, Any
 from ordo.security.authentication import authentication_middleware
-from ordo.config import get_adapter
+from ordo.config import get_adapter, settings
 from ordo.models.api.login import (
     LoginInitiateRequest,
     LoginInitiateResponse,
@@ -8,10 +9,45 @@ from ordo.models.api.login import (
     LoginCompleteResponse,
 )
 from ordo.models.api.errors import ApiError
+from ordo.models.api.unified import UnifiedResponse
+from ordo.core.orchestrator import RequestOrchestrator
+from ordo.security.session import SessionManager
+from ordo.adapters.mock import MockAdapter
+from ordo.adapters.fyers import FyersAdapter
+from ordo.adapters.hdfc import HDFCAdapter
 
 app = FastAPI()
 
 app.middleware("http")(authentication_middleware)
+
+
+def get_session_manager() -> SessionManager:
+    """Provide SessionManager instance."""
+    return SessionManager(secret_key=settings.SECRET_KEY)
+
+
+def get_orchestrator() -> RequestOrchestrator:
+    """Provide RequestOrchestrator instance with dependencies."""
+    session_manager = get_session_manager()
+    adapter_registry = {
+        "mock": MockAdapter,
+        "fyers": FyersAdapter,
+        "hdfc": HDFCAdapter,
+    }
+    return RequestOrchestrator(session_manager, adapter_registry)
+
+
+def get_request_context() -> Dict[str, Any]:
+    """
+    Provide request context for orchestrator operations.
+    
+    In a real implementation, this would extract user/session data from the request.
+    For now, returns a minimal context.
+    """
+    return {
+        "account_id": "default_account",
+        "session_data": {},
+    }
 
 
 @app.get("/health")
@@ -22,6 +58,101 @@ async def health_check():
 @app.get("/protected")
 async def protected_route():
     return {"message": "You have accessed a protected route."}
+
+
+# API v1 Router for orchestrated operations
+api_v1_router = APIRouter(prefix="/api/v1", tags=["Multi-Broker Operations"])
+
+
+@api_v1_router.get(
+    "/portfolio",
+    response_model=UnifiedResponse,
+    summary="Get portfolio from multiple brokers",
+    response_description="Unified portfolio data from all requested brokers",
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ApiError,
+            "description": "Invalid request - at least one broker required",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ApiError,
+            "description": "Internal server error",
+        },
+    },
+)
+async def get_portfolio(
+    brokers: List[str] = Query(..., description="List of broker IDs to query"),
+    orchestrator: RequestOrchestrator = Depends(get_orchestrator),
+    context: Dict[str, Any] = Depends(get_request_context),
+) -> UnifiedResponse:
+    """
+    Retrieve unified portfolio across multiple brokers.
+    
+    Returns aggregated holdings, positions, and funds from all specified brokers.
+    Supports partial success - if one broker fails, others still return data.
+    """
+    if not brokers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one broker ID is required",
+        )
+
+    try:
+        return await orchestrator.get_portfolio(brokers, context)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@api_v1_router.post(
+    "/orders",
+    response_model=UnifiedResponse,
+    summary="Place order across multiple brokers",
+    response_description="Unified order placement results from all requested brokers",
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ApiError,
+            "description": "Invalid request - order data or brokers missing",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ApiError,
+            "description": "Internal server error",
+        },
+    },
+)
+async def place_order(
+    order_data: Dict[str, Any] = Body(..., description="Order details to place"),
+    brokers: List[str] = Query(..., description="List of broker IDs to place order"),
+    orchestrator: RequestOrchestrator = Depends(get_orchestrator),
+    context: Dict[str, Any] = Depends(get_request_context),
+) -> UnifiedResponse:
+    """
+    Place order across multiple brokers concurrently.
+    
+    Supports partial success scenarios - if one broker fails, others may still succeed.
+    Returns unified response with per-broker results and overall status.
+    """
+    if not brokers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one broker ID is required",
+        )
+
+    if not order_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order data is required",
+        )
+
+    try:
+        return await orchestrator.place_order(order_data, brokers, context)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 auth_router = APIRouter(prefix="/login", tags=["Authentication"])
@@ -101,4 +232,5 @@ async def complete_login(
         )
 
 
+app.include_router(api_v1_router)
 app.include_router(auth_router)
