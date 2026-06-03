@@ -70,19 +70,19 @@ Ordo uses a **modular monolithic** architecture following the **Ports and Adapte
 ```mermaid
 graph TD
     %% --- User Environment ---
-    subgraph User's Environment
+    subgraph "User's Environment"
         Client["Client (Script / Dashboard)"]
         OTPScript["OTP Helper CLI"]
     end
 
     %% --- Ordo Service ---
-    subgraph Ordo Service (Docker Container)
+    subgraph "Ordo Service (Docker Container)"
         OrdoAPI["Ordo API (FastAPI)"]
         
         Auth["Auth Middleware"]
         Orchestrator["Request Orchestrator"]
         
-        subgraph Adapters
+        subgraph "Adapters"
             AdapterInterface["IBrokerAdapter Interface"]
             Adapter1["Fyers Adapter"]
             Adapter2["HDFC Adapter"]
@@ -92,7 +92,7 @@ graph TD
             SessionManager["Session Manager (per Adapter)"]
         end
 
-        subgraph Persistence & State Stores
+        subgraph "Persistence & State Stores"
             DB["SQLite / Postgres"]
             IdempotencyStore["Idempotency Store (persistent)"]
             KillSwitchStore["Kill-Switch Store (persistent)"]
@@ -100,13 +100,13 @@ graph TD
             AuditLog["Audit Log (JSON file and/or DB)"]
         end
 
-        subgraph In-Memory State
+        subgraph "In-Memory State"
             CircuitBreakerStore["Circuit Breaker State (ephemeral)"]
         end
     end
 
     %% --- External Services ---
-    subgraph External Services
+    subgraph "External Services"
         BrokerAPIs["External Broker APIs"]
     end
 
