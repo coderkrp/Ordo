@@ -111,7 +111,7 @@ graph TD
     end
 
     %% --- Primary Flows ---
-    Client --> |API Requests (TLS)| OrdoAPI
+    Client --> |API Requests via TLS| OrdoAPI
     OTPScript --> |Initiates login & submits OTP via API| OrdoAPI
 
     OrdoAPI --> Auth
